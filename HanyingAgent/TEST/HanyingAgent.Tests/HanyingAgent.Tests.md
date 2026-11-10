@@ -15,7 +15,7 @@ WorkingMemory 阶段的历史统一运行结果：252 项通过、0 失败、0 �
 Context 五步最小版共 77 项测试通过，其中 57 项使用手写工作记忆替身进行独立验证，
 20 项直接组合真实 Builder、Manager 与 Store，使用可控时间，不调用真实 LLM。
 
-2026-11-09 最新全项目统一验收：329 项通过、0 失败、0 跳过；解决方案构建为 0 警告、0 错误。
+2026-11-09 Context 阶段的历史全项目统一验收：329 项通过、0 失败、0 跳过；解决方案构建为 0 警告、0 错误。
 
 | 测试分组 | 通过用例数 |
 |---|---:|
@@ -28,7 +28,12 @@ Context 五步最小版共 77 项测试通过，其中 57 项使用手写工作�
 | ContextBoundary | 20 |
 | 合计 | 329 |
 
-入口仍仅输出 HanyingAgent；应用 70 个 Compile 项不包含 TEST 源码。精确 Token 预算、模型适配器与 Agent 接入仍未实现。
+2026-11-10 新增 Ollama 适配器 89 项离线测试，使用手写 HttpMessageHandler，不依赖模型服务。
+与 77 项 Context 用例合并回归共 166 项通过、0 失败、0 跳过，解决方案构建 0 警告、0 错误；
+其余 252 项历史用例本轮未重跑，不能把 329 + 89 表述为本轮全套运行结果。
+另以实际适配器及 Context 调用本机模型验证合成文本，手工联调不计入离线测试数量。
+
+入口仍仅输出 HanyingAgent；应用 71 个 Compile 项不包含 TEST 源码。精确 Token 预算与 Agent 接入仍未实现。
 
 ## 直属子模块
 
@@ -36,6 +41,7 @@ Context 五步最小版共 77 项测试通过，其中 57 项使用手写工作�
 |---|---|
 | [WorkingMemory](./WorkingMemory/WorkingMemory.md) | 验证记忆契约、Store、Manager 和真实组合的边界与并发行为。 |
 | [Context](./Context/Context.md) | 验证构建请求、字符上限、工作记忆参考数据及真实 Builder + Manager + Store 组合。 |
+| [LanguageModels](./LanguageModels/LanguageModels.md) | 验证 Ollama 原生 HTTP 请求、响应、错误、取消和超时协议。 |
 | [Support](./Support/Support.md) | 提供可控 UTC 时钟并测试其行为。 |
 
 ## 运行
@@ -94,6 +100,12 @@ dotnet test .\TEST\HanyingAgent.Tests\HanyingAgent.Tests.csproj --no-restore --f
 
 ```powershell
 dotnet test .\TEST\HanyingAgent.Tests\HanyingAgent.Tests.csproj --no-restore --filter "FullyQualifiedName~HanyingAgent.Tests.Context.ContextBoundaryTests"
+```
+
+仅运行 Ollama 适配器离线测试：
+
+```powershell
+dotnet test .\TEST\HanyingAgent.Tests\HanyingAgent.Tests.csproj --no-restore --filter "FullyQualifiedName~HanyingAgent.Tests.LanguageModels."
 ```
 
 ## 设计边界

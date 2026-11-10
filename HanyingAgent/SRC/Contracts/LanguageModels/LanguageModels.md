@@ -5,7 +5,8 @@
 定义 Runtime 与语言模型能力之间的公共协议，隔离 OpenAI、Azure OpenAI 等具体 Provider 的 SDK 差异。
 LanguageModels 表示语言模型能力，与其他模块内部用于数据结构分类的 Models 区分。
 
-当前已定义文本与工具消息、非流式调用及响应契约，没有模型客户端或 Provider SDK 依赖。
+当前已定义文本与工具消息、非流式调用及响应契约；公共契约不依赖 Provider SDK。
+基础设施已有 Ollama 纯文本非流式适配器，工具协议仍是公共契约预留能力，不代表该适配器支持工具调用。
 
 ## 直属子模块
 

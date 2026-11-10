@@ -4,7 +4,8 @@
 
 提供与技术平台有关的具体实现，使 Runtime 与能力业务规则不依赖某个 Provider、数据库或传输协议。
 
-当前 Persistence 已实现工作记忆的进程内存 Store；其余适配与可观测性仍为目录骨架。
+当前 Persistence 已实现工作记忆的进程内存 Store，LanguageModels 已实现 Ollama 纯文本非流式 HTTP 适配器；
+其他 Provider 与可观测性仍为目录骨架。
 
 ## 直属子模块
 

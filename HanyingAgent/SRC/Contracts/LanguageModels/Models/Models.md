@@ -42,4 +42,5 @@ Stop=0、ToolCalls=1、Length=2、ContentFiltered=3、Refused=4、Unknown=5，�
 Stop 只表示本轮模型正常结束，不表示 Task 已完成；Length 表示输出被截断，不能当作完整工具指令执行。
 Unknown 表示无法映射或未报告结束原因，不等于网络失败；实际调用异常必须显式传播。
 
-JsonRequired 只强制核心字段存在，其他入口校验和消息关联校验仍待实现，不承诺 DTO 自动完成全部验证。
+JsonRequired 只强制核心字段存在，不承诺 DTO 自动完成全部验证。
+具体适配器负责所支持子集的入口校验；Ollama 实现已校验纯文本与生成选项，完整工具关联仍待后续实现。

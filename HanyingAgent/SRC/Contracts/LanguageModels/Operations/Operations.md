@@ -25,4 +25,5 @@
 - CancellationToken 控制本次调用或等待，不等于取消所属 Task，也不证明远端生成或计费已经停止。
 - Provider 响应完成并不自动进入 Task 终态；Runtime 依据结束原因和工具调用决定后续处理。
 
-当前没有具体实现、认证配置、网络请求、自动重试或流式接口。
+基础设施已有 [Ollama 适配器](../../../Infrastructure/LanguageModels/LanguageModels.md)，支持纯文本非流式 HTTP 调用，
+明确拒绝工具定义与工具历史，失败及取消显式传播。当前没有统一认证配置、自动重试或流式接口。
