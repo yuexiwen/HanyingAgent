@@ -1,0 +1,167 @@
+classDiagram
+    direction LR
+
+    class IMemoryWriter {
+        <<interface>>
+        +WriteAsync(request)
+        +UpdateAsync(memoryId, update)
+        +ForgetAsync(memoryId)
+    }
+
+    class IWorkingMemoryManager {
+        <<interface>>
+        +ListRecentAsync(request)
+    }
+
+    class ILongTermMemoryManager {
+        <<interface>>
+        +SearchAsync(query)
+    }
+
+    class MemoryItem {
+        <<record>>
+        +MemoryId Id
+        +MemoryOwner Owner
+        +MemoryType Type
+        +string Content
+        +string Source
+        +double Confidence
+        +double Importance
+        +MemoryStatus Status
+        +DateTimeOffset CreatedAt
+        +DateTimeOffset UpdatedAt
+        +DateTimeOffset? ExpiresAt
+    }
+
+    class MemoryOwner {
+        <<record>>
+        +MemoryScope Scope
+        +SessionId? SessionId
+        +TaskId? TaskId
+        +UserId? UserId
+    }
+
+    class MemoryWriteRequest {
+        <<record>>
+        +MemoryOwner Owner
+        +MemoryType Type
+        +string Content
+        +string Source
+        +double Confidence
+        +double Importance
+        +DateTimeOffset? ExpiresAt
+    }
+
+    class MemoryUpdateRequest {
+        <<record>>
+        +string Content
+        +string Source
+        +double Confidence
+        +double Importance
+        +MemoryStatus Status
+        +DateTimeOffset? ExpiresAt
+    }
+
+    class MemoryReadRequest {
+        <<record>>
+        +MemoryOwner Owner
+        +MemoryType? Type
+        +int Limit
+    }
+
+    class MemorySearchRequest {
+        <<record>>
+        +string Query
+        +MemoryOwner Owner
+        +MemoryType? Type
+        +int TopK
+    }
+
+    class MemorySearchResult {
+        <<record>>
+        +MemoryItem Item
+        +double Score
+    }
+
+    class MemoryScope {
+        <<enumeration>>
+        Task
+        Session
+        User
+        Global
+    }
+
+    class MemoryType {
+        <<enumeration>>
+        Fact
+        Preference
+        Decision
+        Experience
+        Hypothesis
+        Summary
+    }
+
+    class MemoryStatus {
+        <<enumeration>>
+        Active
+        Confirmed
+        Superseded
+        Contradicted
+        Expired
+    }
+
+    class MemoryId {
+        <<record struct>>
+        +string Value
+    }
+    class SessionId {
+        <<record struct>>
+        +string Value
+    }
+    class TaskId {
+        <<record struct>>
+        +string Value
+    }
+    class UserId {
+        <<record struct>>
+        +string Value
+    }
+
+    IMemoryWriter <|-- IWorkingMemoryManager
+    IMemoryWriter <|-- ILongTermMemoryManager
+    IMemoryWriter ..> MemoryWriteRequest : Write input
+    IMemoryWriter ..> MemoryUpdateRequest : Update input
+    IMemoryWriter ..> MemoryId : Update / Forget input
+    IMemoryWriter ..> MemoryItem : Write / Update output
+
+    IWorkingMemoryManager ..> MemoryReadRequest : ListRecent input
+    IWorkingMemoryManager ..> MemoryItem : Read output list
+
+    ILongTermMemoryManager ..> MemorySearchRequest : Search input
+    ILongTermMemoryManager ..> MemorySearchResult : Search output list
+
+    MemoryItem --> "1" MemoryId : Id
+    MemoryItem --> "1" MemoryOwner : Owner
+    MemoryItem --> "1" MemoryType : Type
+    MemoryItem --> "1" MemoryStatus : Status
+
+    MemoryOwner --> "1" MemoryScope : Scope
+    MemoryOwner --> "0..1" SessionId : SessionId
+    MemoryOwner --> "0..1" TaskId : TaskId
+    MemoryOwner --> "0..1" UserId : UserId
+
+    MemoryWriteRequest --> "1" MemoryOwner : Owner
+    MemoryWriteRequest --> "1" MemoryType : Type
+    MemoryReadRequest --> "1" MemoryOwner : Owner
+    MemoryReadRequest --> "0..1" MemoryType : Type filter
+    MemorySearchRequest --> "1" MemoryOwner : Owner
+    MemorySearchRequest --> "0..1" MemoryType : Type filter
+    MemoryUpdateRequest --> "1" MemoryStatus : Status
+    MemorySearchResult --> "1" MemoryItem : Item
+
+    note for IMemoryWriter "Shared mutation contract only; implementations and visibility guarantees remain separate."
+    note for IWorkingMemoryManager "Direct owner lookup; newest updated first; no Query or Score.\nSuccessful mutations are visible to subsequent reads."
+    note for ILongTermMemoryManager "Natural-language retrieval; search indexing may lag writes.\nIndex construction is infrastructure, not an Agent execution step."
+    note for MemoryOwner "Task: SessionId + TaskId only\nSession: SessionId only\nUser: UserId only\nGlobal: no owner IDs; shared within this instance"
+    note for MemoryScope "Ownership is independent of retention and storage.\nDefaults: Task/Session working, User/Global long-term."
+    note "Methods are async; return wrappers and CancellationToken omitted.\nBoth sources feed Context; consolidation creates new long-term memories."

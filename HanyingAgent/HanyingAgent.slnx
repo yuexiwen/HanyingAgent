@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/TEST/">
+    <Project Path="TEST/HanyingAgent.Tests/HanyingAgent.Tests.csproj" />
+  </Folder>
+  <Project Path="HanyingAgent.csproj" />
+</Solution>
