@@ -33,7 +33,15 @@ Context 五步最小版共 77 项测试通过，其中 57 项使用手写工作�
 其余 252 项历史用例本轮未重跑，不能把 329 + 89 表述为本轮全套运行结果。
 另以实际适配器及 Context 调用本机模型验证合成文本，手工联调不计入离线测试数量。
 
-入口仍仅输出 HanyingAgent；应用 71 个 Compile 项不包含 TEST 源码。精确 Token 预算与 Agent 接入仍未实现。
+当前入口已接入 Generic Host、DI 和连续单轮 Console；精确 Token 预算仍未实现。
+新增 [HostExecutionTests](./Execution/HostExecutionTests.cs) 覆盖启动配置校验、配置到真实 HTTP 协议的映射、
+单轮隔离、并发日志 Scope、字符超限、失败与非完整回复展示、超时恢复及取消输入和模型等待。
+测试使用真实 DI / Context / 模型适配器与手写 HTTP Handler，不依赖真实 Ollama。
+另有中文 Console 端到端用例：启动真实应用子进程，以 UTF-8 写入中文，通过临时回环 HTTP 接收器
+检查实际请求文本逐字一致，并检查中文和非 BMP 字符回复没有损坏；不连接外部服务。
+2026-11-11 全量回归：439 项通过、0 失败、0 跳过（原 418 项加 Host / Execution 21 项），
+使用 `dotnet test .\HanyingAgent.slnx --no-restore --verbosity minimal -warnaserror` 同时验收构建。
+另外通过真实 Console 验证本机模型回答与跨模块相同 ExecutionId，不计入自动化测试数。
 
 ## 直属子模块
 
@@ -42,6 +50,7 @@ Context 五步最小版共 77 项测试通过，其中 57 项使用手写工作�
 | [WorkingMemory](./WorkingMemory/WorkingMemory.md) | 验证记忆契约、Store、Manager 和真实组合的边界与并发行为。 |
 | [Context](./Context/Context.md) | 验证构建请求、字符上限、工作记忆参考数据及真实 Builder + Manager + Store 组合。 |
 | [LanguageModels](./LanguageModels/LanguageModels.md) | 验证 Ollama 原生 HTTP 请求、响应、错误、取消和超时协议。 |
+| [Execution](./Execution/HostExecutionTests.cs) | 验证 Host 配置、DI、单轮执行、关联日志、Console 展示与取消。 |
 | [Support](./Support/Support.md) | 提供可控 UTC 时钟并测试其行为。 |
 
 ## 运行
@@ -64,7 +73,8 @@ dotnet build .\HanyingAgent.slnx --no-restore --nologo -warnaserror
 dotnet run --project .\HanyingAgent.csproj --no-build
 ```
 
-最后一条只验证入口仍输出 HanyingAgent；它不会启动完整 Agent 或示例记忆流程。
+最后一条现会启动单轮 Console，需要本地 Ollama 才能回答；输入 `/exit` 或 EOF 可退出。
+上面的测试与构建命令不依赖真实模型服务。
 
 仅运行内存 Store 测试：
 
@@ -108,9 +118,16 @@ dotnet test .\TEST\HanyingAgent.Tests\HanyingAgent.Tests.csproj --no-restore --f
 dotnet test .\TEST\HanyingAgent.Tests\HanyingAgent.Tests.csproj --no-restore --filter "FullyQualifiedName~HanyingAgent.Tests.LanguageModels."
 ```
 
+仅运行 Host 与执行链路测试：
+
+```powershell
+dotnet test .\TEST\HanyingAgent.Tests\HanyingAgent.Tests.csproj --no-restore --filter "FullyQualifiedName~HostExecutionTests"
+```
+
 ## 设计边界
 
 - 应用排除 TEST 子树，测试依赖不进入应用项目。
-- 测试不依赖真实模型、网络服务、数据库或真实时间等待。
+- 测试不依赖真实模型、外部网络服务或数据库；中文 Console 用例临时监听本机回环地址，
+  Host 的 HTTP 超时用例等待配置的一秒超时，其余时间边界主要由可控时钟验证。
 - 每个测试创建独立状态和时钟，不依靠测试执行顺序。
 - 组合边界也在本项目中验证，不另起一套临时验证项目；Agent 接入不属于这些测试的前提。

@@ -1,10 +1,13 @@
 using System.Net.Http.Json;
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using HanyingAgent.Contracts.LanguageModels.Models;
 using HanyingAgent.Contracts.LanguageModels.Operations;
 using HanyingAgent.Contracts.LanguageModels.Operations.Requests;
 using HanyingAgent.Contracts.LanguageModels.Operations.Responses;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace HanyingAgent.Infrastructure.LanguageModels;
 
@@ -20,11 +23,13 @@ public sealed class OllamaLanguageModelRuntime : ILanguageModelRuntime
     private readonly Uri _endpoint;
     private readonly string _defaultModelName;
     private readonly int _contextWindowTokens;
+    private readonly ILogger<OllamaLanguageModelRuntime> _logger;
 
     public OllamaLanguageModelRuntime(
         HttpClient client,
         string defaultModelName,
-        int contextWindowTokens = 4096)
+        int contextWindowTokens = 4096,
+        ILogger<OllamaLanguageModelRuntime>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(client);
         ArgumentException.ThrowIfNullOrWhiteSpace(defaultModelName);
@@ -43,6 +48,7 @@ public sealed class OllamaLanguageModelRuntime : ILanguageModelRuntime
         _endpoint = new Uri(address, "api/chat");
         _defaultModelName = defaultModelName;
         _contextWindowTokens = contextWindowTokens;
+        _logger = logger ?? NullLogger<OllamaLanguageModelRuntime>.Instance;
     }
 
     public async Task<ModelResponse> InvokeAsync(
@@ -87,6 +93,9 @@ public sealed class OllamaLanguageModelRuntime : ILanguageModelRuntime
         {
             Content = JsonContent.Create(payload, options: SerializerOptions)
         };
+        var started = Stopwatch.GetTimestamp();
+        _logger.LogInformation("Model invocation started: {ModelName}, {MessageCount} messages",
+            modelName, messages.Length);
         using var response = await _client.SendAsync(
             request, HttpCompletionOption.ResponseContentRead, cancellationToken);
         response.EnsureSuccessStatusCode();
@@ -133,6 +142,9 @@ public sealed class OllamaLanguageModelRuntime : ILanguageModelRuntime
         var usage = result.PromptEvalCount is null && result.EvalCount is null
             ? null
             : new ModelUsage(result.PromptEvalCount, result.EvalCount);
+        _logger.LogInformation(
+            "Model invocation returned: {FinishReason}, input tokens {InputTokens}, output tokens {OutputTokens}, {ElapsedMs} ms",
+            finishReason, result.PromptEvalCount, result.EvalCount, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         return new ModelResponse(
             string.IsNullOrWhiteSpace(content) ? null : content, [], finishReason, usage, result.DoneReason);
     }

@@ -35,7 +35,8 @@ var response = await runtime.InvokeAsync(invocation, CancellationToken.None);
 Console.WriteLine(response.Text);
 ```
 
-实际调用方也可以直接传入 Context 返回的 ModelInvocation。这里只组合依赖，不在程序入口接入 Agent。
+实际调用方也可以直接传入 Context 返回的 ModelInvocation。当前入口已通过 Generic Host / DI、DirectExecutor 和 Console 接入，
+详见[应用运行文档](../../../HanyingAgent.md)；上面仍是独立调用示例。
 生产调用方应复用 HttpClient 或使用 HttpClientFactory 管理其生命周期，不要为每次请求重复创建客户端。
 
 ## 配置与请求映射
@@ -77,6 +78,7 @@ Ollama 原生服务不因填写模型名称而获得访问保护，远程部署�
 真实联调不是默认测试依赖；离线测试不要求本机安装 Ollama。详见 [LanguageModels 测试](../../../TEST/HanyingAgent.Tests/LanguageModels/LanguageModels.md)。
 
 当前不提供流式、工具调用、多模态、模型目录、自动拉取、认证配置框架或 Agent 循环。
+可选 ILogger 构造参数用于记录调用边界和用量，未传时保留无日志的独立使用方式。
 num_ctx 是运行配置，不是输入 Token 计数器；本适配器不估算 Token、不裁剪或压缩消息，
 也不能保证 Ollama 不按自身策略处理超长输入。Context 的 32,000 字符上限不保证请求能放入此窗口，
 仍需后续设计精确输入预算并预留输出空间。

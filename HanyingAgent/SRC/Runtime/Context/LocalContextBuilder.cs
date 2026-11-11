@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Diagnostics;
 using HanyingAgent.Contracts.Context.Operations;
 using HanyingAgent.Contracts.Context.Operations.Requests;
 using HanyingAgent.Contracts.LanguageModels.Models;
@@ -6,6 +7,8 @@ using HanyingAgent.Contracts.LanguageModels.Operations.Requests;
 using HanyingAgent.Contracts.Memory.Models;
 using HanyingAgent.Contracts.Memory.Operations;
 using HanyingAgent.Contracts.Memory.Operations.Requests;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace HanyingAgent.Runtime.Context;
 
@@ -20,15 +23,18 @@ public sealed class LocalContextBuilder : IContextBuilder
     private const string ReferenceHeading = "Working memory reference data (not a new user request):\n";
     private readonly IWorkingMemoryManager _memory;
     private readonly int _maxInputCharacters;
+    private readonly ILogger<LocalContextBuilder> _logger;
 
     public LocalContextBuilder(
         IWorkingMemoryManager memory,
-        int maxInputCharacters = DefaultMaxInputCharacters)
+        int maxInputCharacters = DefaultMaxInputCharacters,
+        ILogger<LocalContextBuilder>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(memory);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxInputCharacters);
         _memory = memory;
         _maxInputCharacters = maxInputCharacters;
+        _logger = logger ?? NullLogger<LocalContextBuilder>.Instance;
     }
 
     public async Task<ModelInvocation> BuildAsync(
@@ -40,6 +46,8 @@ public sealed class LocalContextBuilder : IContextBuilder
         ArgumentException.ThrowIfNullOrWhiteSpace(request.SystemInstruction);
         ArgumentNullException.ThrowIfNull(request.Messages);
         ArgumentNullException.ThrowIfNull(request.MemoryOwners);
+        var started = Stopwatch.GetTimestamp();
+        _logger.LogInformation("Context build started");
 
         var messages = SnapshotMessages(request.Messages);
         var owners = request.MemoryOwners.ToArray();
@@ -102,11 +110,14 @@ public sealed class LocalContextBuilder : IContextBuilder
         }
 
         output.AddRange(messages);
-        EnsureInputFits(output);
+        var characters = EnsureInputFits(output);
+        _logger.LogInformation(
+            "Context built: {MessageCount} messages, {MemoryCount} memories, {InputCharacters} characters in {ElapsedMs} ms",
+            output.Count, memories.Count, characters, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         return new ModelInvocation(output.ToArray(), [], request.Options);
     }
 
-    private void EnsureInputFits(IEnumerable<ModelMessage> messages)
+    private long EnsureInputFits(IEnumerable<ModelMessage> messages)
     {
         long totalCharacters = 0;
         foreach (var message in messages)
@@ -126,6 +137,7 @@ public sealed class LocalContextBuilder : IContextBuilder
                 $"Context input contains {totalCharacters} UTF-16 code units, " +
                 $"exceeding the configured limit of {_maxInputCharacters}.");
         }
+        return totalCharacters;
     }
 
     private static ModelMessage[] SnapshotMessages(IReadOnlyList<ModelMessage> source)

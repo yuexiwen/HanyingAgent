@@ -52,7 +52,8 @@ var invocation = await builder.BuildAsync(request, cancellationToken);
 ```
 
 需要记忆时由调用方先通过 memory.WriteAsync 写入；Builder 自身只读。
-这只是组件组合方式，尚未写入程序入口，也不会调用模型；返回值是 ModelInvocation，不是模型回复。
+该示例本身只组合 Context，不会调用模型；返回值是 ModelInvocation，不是模型回复。
+当前 Console 通过 DI 和 DirectExecutor 接入此构建器，但传入空 MemoryOwners，不自动召回记忆。
 
 ## 输入字符上限
 
@@ -90,7 +91,7 @@ Owner 数量、序列化前的记忆规模和输入集合物化仍无独立硬�
 2026-11-09 统一验收：全项目 329 项测试通过、0 失败、0 跳过，其中 Context 共 77 项；
 解决方案构建 0 警告、0 错误，入口仍仅输出 HanyingAgent，应用 70 个编译项均不包含 TEST 源码。
 测试分组与复现命令见 [测试项目](../../../TEST/HanyingAgent.Tests/HanyingAgent.Tests.md)。
-未实现摘要、压缩、裁剪、相关性评分、长期记忆、Skills、工具历史、自动对话加载或 Agent 接入。
+未实现摘要、压缩、裁剪、相关性评分、长期记忆、Skills、工具历史或自动对话加载。
 
 ## 后续组件规划（非本期已实现）
 

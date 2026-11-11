@@ -6,8 +6,9 @@
 项目以学习为目的，先采用单项目、单进程的模块化单体，通过明确契约为后续远程适配保留边界。
 
 本文中的业务执行流程是目标设计，不代表所有模块已经实现。当前已定义 Session、Task、User、
-Memory、Tools、LanguageModels 和 Conversation 的主要契约；各业务管理器、执行器、
-具体存储、模型客户端等仍待实现。程序入口目前只输出项目名称。
+Memory、Tools、LanguageModels 和 Conversation 的主要契约；已实现内存工作记忆、Context Builder、
+Ollama 模型适配器，以及 Generic Host / DI、关联日志和 DirectExecutor 驱动的单轮 Console。
+正式会话、任务编排、历史、工具与恢复流程仍待实现；当前 Console 不维护多轮历史。
 
 逻辑模块不等于独立进程或项目，Contracts 中的数据类型也不等于保存数据或执行业务的实现。
 项目入口见 [HanyingAgent](../HanyingAgent/HanyingAgent.md)。
