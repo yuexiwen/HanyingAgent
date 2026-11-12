@@ -4,7 +4,8 @@
 
 定义实际交互历史的公共协议，按 SessionId 关联用户输入、Assistant 输出、工具调用和结果。
 
-当前已定义消息、类型化内容、追加和读取契约；没有 ConversationManager、存储端口或具体存储实现。
+当前已定义消息、类型化内容、追加和读取契约；纯文本本地 Manager、存储端口与内存实现已接入 Console，
+范围与约束见 [Runtime/Conversation](../../Runtime/Conversation/Conversation.md)。
 
 ## 直属子模块
 
@@ -27,4 +28,5 @@ ConversationContent 不继承 ModelMessage：历史保存事实和结束信息�
 
 MessageId 由可信调用方在首次追加前生成，重试复用；服务端分配 Sequence 和 CreatedAt。
 首次读取默认最近 20 条，页内 Sequence 升序，使用不透明游标继续读取更早消息。
-以上都是后续实现需要兑现的规则，不表示当前 DTO 已实现去重、排序或权限控制。
+DTO 本身不实现去重、排序或权限控制；这些由本地 Manager 与 Store 共同兑现。
+工具历史与任务关联尚未实现，本地版本对此明确拒绝，而非静默丢弃。

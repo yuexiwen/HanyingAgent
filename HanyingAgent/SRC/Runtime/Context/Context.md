@@ -8,6 +8,22 @@
 当前没有子目录，已有 [LocalContextBuilder](./LocalContextBuilder.cs)，实现
 [IContextBuilder](../../Contracts/Context/Operations/IContextBuilder.cs)。
 
+## 会话历史窗口
+
+[ConversationWindow](./ConversationWindow.cs) 在 Builder 之前选择并转换历史，不改变 Builder 的最终校验职责。
+由 DialogueCoordinator 提供已经记录的当前 User 消息及 Sequence；窗口不写记录、不调用模型。
+
+- 当前用户输入仅加入一次；只选择 Sequence 更早且属于该会话的消息，最终按时间顺序发送。
+- 正常片段要求相邻 User + 非空白、Stop、无工具调用的 Assistant；跨分页边界也能组成片段。
+- 截断、未知、拒绝、过滤、没有回答的旧输入不纳入；本期没有工具片段、摘要或语义召回。
+- 默认最多 10 个片段，可配置为 1–100；从近到远选取，达到字符预算时停止，不跳过超大新片段去拼更早内容。
+- UTF-16 预算包含系统指令、历史与当前输入；当前输入和系统指令必须完整保留，本身超限就失败。
+- 每页 20 条，最多扫描 200 条旧记录，防止连续失败导致无限翻页；达到任一上限就停止。
+- 最终 Builder 仍校验总长度；本链路传空 MemoryOwners，不借窗口预算隐式加入记忆。
+- 窗口淘汰不删除历史；离开窗口的事实可能忘记，字符预算也不能保证模型 Token 窗口。
+- 事件 2003 记录选中片段、扫描数、扫描中未选消息数和停止原因；
+  不是未扫描的全部会话消息计数，不能把它解释为删除数量。
+
 ## 当前最小实现
 
 构造注入 IWorkingMemoryManager，调用方通过
@@ -53,7 +69,8 @@ var invocation = await builder.BuildAsync(request, cancellationToken);
 
 需要记忆时由调用方先通过 memory.WriteAsync 写入；Builder 自身只读。
 该示例本身只组合 Context，不会调用模型；返回值是 ModelInvocation，不是模型回复。
-当前 Console 通过 DI 和 DirectExecutor 接入此构建器，但传入空 MemoryOwners，不自动召回记忆。
+当前 Console 通过 DialogueCoordinator、ConversationWindow 和 DirectExecutor 接入此构建器，
+传入空 MemoryOwners，不自动召回记忆。
 
 ## 输入字符上限
 
@@ -91,7 +108,8 @@ Owner 数量、序列化前的记忆规模和输入集合物化仍无独立硬�
 2026-11-09 统一验收：全项目 329 项测试通过、0 失败、0 跳过，其中 Context 共 77 项；
 解决方案构建 0 警告、0 错误，入口仍仅输出 HanyingAgent，应用 70 个编译项均不包含 TEST 源码。
 测试分组与复现命令见 [测试项目](../../../TEST/HanyingAgent.Tests/HanyingAgent.Tests.md)。
-未实现摘要、压缩、裁剪、相关性评分、长期记忆、Skills、工具历史或自动对话加载。
+会话链路已在 Builder 前实现最近历史选择与裁剪；Builder 本身不裁剪。
+未实现摘要、压缩、相关性评分、长期记忆、Skills 或工具历史。
 
 ## 后续组件规划（非本期已实现）
 

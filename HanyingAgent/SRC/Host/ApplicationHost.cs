@@ -7,6 +7,12 @@ using HanyingAgent.Infrastructure.LanguageModels;
 using HanyingAgent.Infrastructure.Persistence;
 using HanyingAgent.Runtime.Context;
 using HanyingAgent.Runtime.Execution;
+using HanyingAgent.Contracts.Users.Operations;
+using HanyingAgent.Contracts.Sessions.Operations;
+using HanyingAgent.Contracts.Conversation.Operations;
+using HanyingAgent.Runtime.Users;
+using HanyingAgent.Runtime.Sessions;
+using HanyingAgent.Runtime.Conversation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -55,6 +61,8 @@ public static class ApplicationHost
                 "Agent:MaxOutputTokens must be positive.")
             .Validate(settings => double.IsFinite(settings.Temperature) && settings.Temperature >= 0,
                 "Agent:Temperature must be finite and nonnegative.")
+            .Validate(settings => settings.MaxHistoryTurns is > 0 and <= 100,
+                "Agent:MaxHistoryTurns must be between 1 and 100.")
             .ValidateOnStart();
 
         builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
@@ -77,6 +85,17 @@ public static class ApplicationHost
                 services.GetRequiredService<ILogger<OllamaLanguageModelRuntime>>());
         });
         builder.Services.AddTransient<DirectExecutor>();
+        builder.Services.AddSingleton<InMemoryDialogueStore>();
+        builder.Services.AddSingleton<IUserStore>(services => services.GetRequiredService<InMemoryDialogueStore>());
+        builder.Services.AddSingleton<ISessionStore>(services => services.GetRequiredService<InMemoryDialogueStore>());
+        builder.Services.AddSingleton<IConversationStore>(services => services.GetRequiredService<InMemoryDialogueStore>());
+        builder.Services.AddSingleton<IUserManager, LocalUserManager>();
+        builder.Services.AddSingleton<LocalUserContext>();
+        builder.Services.AddSingleton<LocalSessionManager>();
+        builder.Services.AddSingleton<ISessionManager>(services => services.GetRequiredService<LocalSessionManager>());
+        builder.Services.AddSingleton<IConversationManager, LocalConversationManager>();
+        builder.Services.AddSingleton<ConversationWindow>();
+        builder.Services.AddTransient<DialogueCoordinator>();
         builder.Services.AddSingleton<TextReader>(Console.In);
         builder.Services.AddSingleton<TextWriter>(Console.Out);
         builder.Services.AddSingleton<ConsoleApplication>();

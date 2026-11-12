@@ -21,4 +21,4 @@
 - Runtime 通过契约使用 Capabilities，不直接创建数据库或 HTTP 客户端。
 - Capabilities 不反向依赖 Runtime 的编排实现，可声明实现所需的内部端口。
 - Infrastructure 实现公共契约或内部端口，项目根入口负责选择具体适配器。
-- 当前已实现工作记忆、Context、Ollama 适配与单轮 Console 执行链路；正式会话、任务编排和工具仍待实现。
+- 当前已实现工作记忆、Context、Ollama 适配、用户会话和多轮 Console 历史链路；正式任务编排和工具仍待实现。
