@@ -39,6 +39,12 @@ Context 五步最小版共 77 项测试通过，其中 57 项使用手写工作�
 测试使用真实 DI / Context / 模型适配器与手写 HTTP Handler，不依赖真实 Ollama。
 另有中文 Console 端到端用例：启动真实应用子进程，以 UTF-8 写入中文，通过临时回环 HTTP 接收器
 检查实际请求文本逐字一致，并检查中文和非 BMP 字符回复没有损坏；不连接外部服务。
+新增 [DirectExecutorTests](./Execution/DirectExecutorTests.cs) 的 25 项策略测试：正常交付、截断、
+未知、拒绝、过滤、工具请求优先级、非法响应、元数据保留、依赖错误、取消及 Console 结论展示。
+2026-11-12 本阶段针对性验收：Execution 分组共 47 项通过、0 失败、0 跳过，
+构建使用 `-warnaserror` 通过；本阶段未重跑其余分组或真实 Ollama 联调。
+日志事件编号测试复用上述用例：核对并发执行中的事件编号、名称、顺序及 ExecutionId 隔离，
+并检查非正常交付仍使用 1002，以及失败、取消、超时分别使用 1003、1004、1005。
 2026-11-11 全量回归：439 项通过、0 失败、0 跳过（原 418 项加 Host / Execution 21 项），
 使用 `dotnet test .\HanyingAgent.slnx --no-restore --verbosity minimal -warnaserror` 同时验收构建。
 另外通过真实 Console 验证本机模型回答与跨模块相同 ExecutionId，不计入自动化测试数。

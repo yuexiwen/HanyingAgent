@@ -7,6 +7,7 @@ using HanyingAgent.Contracts.LanguageModels.Operations.Requests;
 using HanyingAgent.Contracts.Memory.Models;
 using HanyingAgent.Contracts.Memory.Operations;
 using HanyingAgent.Contracts.Memory.Operations.Requests;
+using HanyingAgent.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -47,7 +48,7 @@ public sealed class LocalContextBuilder : IContextBuilder
         ArgumentNullException.ThrowIfNull(request.Messages);
         ArgumentNullException.ThrowIfNull(request.MemoryOwners);
         var started = Stopwatch.GetTimestamp();
-        _logger.LogInformation("Context build started");
+        _logger.LogInformation(LogEvents.ContextBuildStarted, "Context build started");
 
         var messages = SnapshotMessages(request.Messages);
         var owners = request.MemoryOwners.ToArray();
@@ -112,6 +113,7 @@ public sealed class LocalContextBuilder : IContextBuilder
         output.AddRange(messages);
         var characters = EnsureInputFits(output);
         _logger.LogInformation(
+            LogEvents.ContextBuildCompleted,
             "Context built: {MessageCount} messages, {MemoryCount} memories, {InputCharacters} characters in {ElapsedMs} ms",
             output.Count, memories.Count, characters, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         return new ModelInvocation(output.ToArray(), [], request.Options);

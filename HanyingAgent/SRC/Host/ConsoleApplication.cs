@@ -1,5 +1,6 @@
 using System.Text.Json;
 using HanyingAgent.Contracts.Context.Operations.Requests;
+using HanyingAgent.Contracts.Execution.Models;
 using HanyingAgent.Contracts.LanguageModels.Models;
 using HanyingAgent.Host.Configuration;
 using HanyingAgent.Runtime.Execution;
@@ -40,22 +41,26 @@ public sealed class ConsoleApplication(
                 var executor = scope.ServiceProvider.GetRequiredService<DirectExecutor>();
                 try
                 {
-                    var response = await executor.ExecuteAsync(new BuildContextRequest(
+                    var outcome = await executor.ExecuteAsync(new BuildContextRequest(
                         settings.SystemInstruction,
                         [new ModelUserMessage(line)],
                         [],
                         new ModelOptions(Temperature: settings.Temperature, MaxOutputTokens: settings.MaxOutputTokens)),
                         cancellationToken);
-                    await output.WriteLineAsync($"Assistant> {response.Text}");
-                    if (response.FinishReason != ModelFinishReason.Stop)
+                    if (!string.IsNullOrWhiteSpace(outcome.Text))
                     {
-                        var status = response.FinishReason switch
+                        await output.WriteLineAsync($"Assistant> {outcome.Text}");
+                    }
+                    if (outcome.Conclusion != ExecutionConclusion.Delivered)
+                    {
+                        var status = outcome.Conclusion switch
                         {
-                            ModelFinishReason.Length => "Output truncated; this is not a complete answer.",
-                            ModelFinishReason.ContentFiltered => "Output was filtered.",
-                            ModelFinishReason.Refused => "The model refused the request.",
-                            ModelFinishReason.ToolCalls => "Tool execution is not supported.",
-                            _ => "Completion is unknown; do not treat this as a complete answer."
+                            ExecutionConclusion.Incomplete => "Output truncated; this is not a complete answer.",
+                            ExecutionConclusion.Filtered => "Output was filtered.",
+                            ExecutionConclusion.Refused => "The model refused the request.",
+                            ExecutionConclusion.UnsupportedAction => "Tool execution is not supported.",
+                            ExecutionConclusion.Unconfirmed => "Completion is unknown; do not treat this as a complete answer.",
+                            _ => throw new InvalidOperationException("Unsupported execution conclusion.")
                         };
                         await output.WriteLineAsync($"[{status}]");
                     }

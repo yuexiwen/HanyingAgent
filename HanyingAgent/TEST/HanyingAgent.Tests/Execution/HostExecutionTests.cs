@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using HanyingAgent.Contracts.Context.Operations.Requests;
+using HanyingAgent.Contracts.Execution.Models;
 using HanyingAgent.Contracts.LanguageModels.Models;
 using HanyingAgent.Host;
 using HanyingAgent.Runtime.Execution;
@@ -173,13 +174,18 @@ public sealed class HostExecutionTests
             firstScope.ServiceProvider.GetRequiredService<DirectExecutor>().ExecuteAsync(Request(), timeout.Token),
             secondScope.ServiceProvider.GetRequiredService<DirectExecutor>().ExecuteAsync(Request(), timeout.Token));
 
-        Assert.All(results, result => Assert.Equal(ModelFinishReason.Stop, result.FinishReason));
+        Assert.All(results, result => Assert.Equal(ExecutionConclusion.Delivered, result.Conclusion));
         var entries = logs.Entries.Where(entry => entry.Category.StartsWith("HanyingAgent.", StringComparison.Ordinal)).ToArray();
         Assert.All(entries, entry => Assert.True(entry.Properties.ContainsKey("ExecutionId")));
         var executions = entries.GroupBy(entry => entry.Properties["ExecutionId"]).ToArray();
         Assert.Equal(2, executions.Length);
         foreach (var execution in executions)
         {
+            Assert.Equal(
+                new (int, string?)[] { (1001, "ExecutionStarted"), (2001, "ContextBuildStarted"),
+                    (2002, "ContextBuildCompleted"), (3001, "ModelInvocationStarted"),
+                    (3002, "ModelInvocationReturned"), (1002, "ExecutionReturned") },
+                execution.Select(entry => (entry.EventId.Id, entry.EventId.Name)));
             Assert.Contains(execution, entry => entry.Category.EndsWith(".DirectExecutor", StringComparison.Ordinal));
             Assert.Contains(execution, entry => entry.Category.EndsWith(".LocalContextBuilder", StringComparison.Ordinal));
             Assert.Contains(execution, entry => entry.Category.EndsWith(".OllamaLanguageModelRuntime", StringComparison.Ordinal));
@@ -201,6 +207,8 @@ public sealed class HostExecutionTests
 
         Assert.Empty(handler.Requests);
         var failure = Assert.Single(logs.Entries, entry => entry.Level == LogLevel.Error);
+        Assert.Equal(1003, failure.EventId.Id);
+        Assert.Equal("ExecutionFailed", failure.EventId.Name);
         Assert.True(failure.Properties.ContainsKey("ExecutionId"));
         Assert.DoesNotContain(logs.Entries, entry => entry.Message.StartsWith("Execution returned", StringComparison.Ordinal));
     }
@@ -256,7 +264,11 @@ public sealed class HostExecutionTests
 
         Assert.Contains("Cancelled. Exiting.", output.ToString());
         Assert.DoesNotContain("Assistant>", output.ToString());
-        Assert.Contains(logs.Entries, entry => entry.Message.StartsWith("Execution cancelled", StringComparison.Ordinal));
+        var cancelled = Assert.Single(logs.Entries,
+            entry => entry.Message.StartsWith("Execution cancelled", StringComparison.Ordinal));
+        Assert.Equal(1004, cancelled.EventId.Id);
+        Assert.Equal("ExecutionCancelled", cancelled.EventId.Name);
+        Assert.Equal(LogLevel.Information, cancelled.Level);
         Assert.DoesNotContain(logs.Entries, entry => entry.Level == LogLevel.Error ||
             entry.Message.StartsWith("Execution returned", StringComparison.Ordinal));
     }
@@ -284,7 +296,9 @@ public sealed class HostExecutionTests
         Assert.Contains("Request timed out", output.ToString());
         Assert.Contains("Assistant> private-answer", output.ToString());
         Assert.DoesNotContain("Cancelled. Exiting.", output.ToString());
-        Assert.Single(logs.Entries, entry => entry.Level == LogLevel.Warning);
+        var timeout = Assert.Single(logs.Entries, entry => entry.Level == LogLevel.Warning);
+        Assert.Equal(1005, timeout.EventId.Id);
+        Assert.Equal("ExecutionTimedOutOrDependencyCancelled", timeout.EventId.Name);
     }
 
     [Fact]
