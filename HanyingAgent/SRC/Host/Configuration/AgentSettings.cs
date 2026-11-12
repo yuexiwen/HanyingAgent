@@ -8,4 +8,5 @@ public sealed class AgentSettings
     public int MaxInputCharacters { get; set; } = 32_000;
     public int MaxOutputTokens { get; set; } = 256;
     public double Temperature { get; set; } = 0.2;
+    public int MaxHistoryTurns { get; set; } = 10;
 }

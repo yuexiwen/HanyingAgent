@@ -110,7 +110,7 @@ public sealed class HostExecutionTests
     }
 
     [Fact]
-    public async Task Console_UsesConfiguredRealPipelineAndDoesNotCarryHistoryAcrossQuestions()
+    public async Task Console_UsesConfiguredRealPipelineAndCarriesCompletedHistoryAcrossQuestions()
     {
         var handler = new RecordingHandler();
         var logs = new RecordingLoggerProvider();
@@ -126,6 +126,7 @@ public sealed class HostExecutionTests
         await host.Services.GetRequiredService<ConsoleApplication>().RunAsync(CancellationToken.None);
 
         Assert.Equal(2, handler.Requests.Count);
+        var requestIndex = 0;
         foreach (var request in handler.Requests)
         {
             Assert.Equal("http://localhost/proxy/api/chat", request.Address);
@@ -133,7 +134,7 @@ public sealed class HostExecutionTests
             var root = json.RootElement;
             Assert.Equal("configured-model", root.GetProperty("model").GetString());
             var messages = root.GetProperty("messages").EnumerateArray().ToArray();
-            Assert.Equal(2, messages.Length);
+            Assert.Equal(requestIndex++ == 0 ? 2 : 4, messages.Length);
             Assert.Equal("configured-system", messages[0].GetProperty("content").GetString());
             Assert.Equal("user", messages[1].GetProperty("role").GetString());
             var options = root.GetProperty("options");
@@ -142,7 +143,13 @@ public sealed class HostExecutionTests
             Assert.Equal(0, options.GetProperty("temperature").GetDouble());
         }
         Assert.Contains("first-private-input", handler.Requests.First().Body);
-        Assert.DoesNotContain("first-private-input", handler.Requests.Last().Body);
+        using (var second = JsonDocument.Parse(handler.Requests.Last().Body))
+        {
+            var messages = second.RootElement.GetProperty("messages").EnumerateArray().ToArray();
+            Assert.Equal("first-private-input", messages[1].GetProperty("content").GetString());
+            Assert.Equal("private-answer", messages[2].GetProperty("content").GetString());
+            Assert.Equal("second-private-input", messages[3].GetProperty("content").GetString());
+        }
         Assert.Equal(2, output.ToString().Split("Assistant> private-answer").Length - 1);
         Assert.All(logs.Entries, entry =>
         {

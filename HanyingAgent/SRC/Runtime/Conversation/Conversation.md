@@ -4,14 +4,51 @@
 
 规划历史对话管理实现，协调消息追加、会话内顺序和历史读取，为 Host 展示及 Context 构建提供数据。
 
-当前只有目录说明，没有子目录、管理器或存储实现。
+当前已实现 [LocalConversationManager](./LocalConversationManager.cs)、
+[IConversationStore](./IConversationStore.cs) 和 [DialogueCoordinator](./DialogueCoordinator.cs)；
+内存实现位于 [Persistence](../../Infrastructure/Persistence/InMemoryDialogueStore.cs)。
+
+## 当前规则
+
+- 通过本地可信身份精确校验会话归属，不根据请求里的 ID 自动授予权限。
+- 首次追加前生成稳定 MessageId，同 ID / Session / Task / 内容重试返回原记录，载荷冲突显式报错。
+- Sequence 在 Store 锁内按会话递增分配，与 CreatedAt 分离；输入和输出记录不依赖时间戳排序。
+- 默认返回最近 20 条，页内升序；页大小 1–200。游标仅用于向前翻页，绑定会话，
+  新消息追加不会改变游标之前的旧页；非法或跨会话游标报错。游标不是授权凭据。
+- 当前仅支持 User 和纯文本 Assistant；Assistant 保留 FinishReason / ProviderFinishReason，
+  可以只记录结束信息。工具历史及非空 TaskId 明确拒绝，避免声称实现了尚不存在的关联校验。
+- 工具列表独立快照并只读暴露，重试按内容比较而非集合引用比较；查询和分页不暴露底层集合。
+- Closed 会话可读取，也可返回已有相同消息的重试；不能新增记录。
+
+## 对话协调
+
+Host 将配置映射为 [DialogueRequest](./DialogueRequest.cs)，Runtime 不依赖 Console 或 Host 配置类型。
+
+```text
+校验会话并持有临时 turn lease
+  → 保存本轮 User，取得 Sequence
+  → ConversationWindow 选择该输入之前的历史，并只加入一次当前输入
+  → DirectExecutor
+  → 保存实际 Assistant 内容和结束原因
+  → 返回 ExecutionOutcome
+```
+
+完整和非正常文本响应均保存用于展示，截断 / 未知 / 拒绝 / 过滤不会进入下一轮窗口。
+工具动作当前无法在纯文本记录中如实表达，UnsupportedAction 明确记录事件但不保存为普通 Assistant 历史。
+连接失败或取消保留已提交的 User，不伪造 Assistant；后续窗口跳过这些未回答的旧输入。
+回复保存失败明确报错，标注 SaveAssistant 阶段，不重复调用模型、不伪装成保存成功。
+本期无自动重试或恢复接口；消息幂等不等于整个对话或模型调用幂等，用户重新提问是新一轮输入。
+异常和取消不回滚已提交记录，也不构成完整事务。
+
+SessionId Scope 覆盖历史选择与执行，DirectExecutor 的 ExecutionId 嵌套其中。
+执行器已有的错误不重复记录；历史读写和会话访问失败由对话协调边界显式记录并抛出。
 
 ## 后续组件规划
 
 | 组件 | 一句话概述 |
 |---|---|
-| ConversationManager | 管理消息写入与读取规则，维护归属和确定顺序。 |
-| 对话存储端口 | 隔离业务管理与内存、JSON、SQLite 等具体保存方式。 |
+| ConversationManager | 已实现本地版本：消息写入、归属、幂等及顺序。 |
+| 对话存储端口 | 已实现：隔离业务管理与具体保存方式。 |
 | 历史读取协调 | 为界面分页和模型上下文选择提供必要记录。 |
 
 ## 设计边界

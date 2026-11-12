@@ -7,8 +7,9 @@
 
 本文中的业务执行流程是目标设计，不代表所有模块已经实现。当前已定义 Session、Task、User、
 Memory、Tools、LanguageModels 和 Conversation 的主要契约；已实现内存工作记忆、Context Builder、
-Ollama 模型适配器，以及 Generic Host / DI、关联日志和 DirectExecutor 驱动的单轮 Console。
-正式会话、任务编排、历史、工具与恢复流程仍待实现；当前 Console 不维护多轮历史。
+Ollama 模型适配器，以及 Generic Host / DI、关联日志和 DirectExecutor 驱动的 Console。
+当前已实现可信本地单用户、内存 Session / Conversation 和有界多轮历史窗口；
+正式任务编排、工具与恢复流程仍待实现，会话执行期保护不等同完整 Task 生命周期。
 
 逻辑模块不等于独立进程或项目，Contracts 中的数据类型也不等于保存数据或执行业务的实现。
 项目入口见 [HanyingAgent](../HanyingAgent/HanyingAgent.md)。

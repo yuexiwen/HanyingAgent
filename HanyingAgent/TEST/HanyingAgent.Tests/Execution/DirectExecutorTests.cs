@@ -160,12 +160,15 @@ public sealed class DirectExecutorTests
         ModelFinishReason reason, string? text, string expectedMessage)
     {
         var model = new StubModel((_, _) => Task.FromResult(new ModelResponse(text, [], reason)));
-        var services = new ServiceCollection();
-        services.AddTransient(_ => CreateExecutor(new StubContext(), model));
-        using var provider = services.BuildServiceProvider();
         using var output = new StringWriter();
-        var console = new ConsoleApplication(provider.GetRequiredService<IServiceScopeFactory>(),
-            Options.Create(new AgentSettings()), new StringReader("question\n/exit\n"), output);
+        var builder = ApplicationHost.CreateBuilder([]);
+        builder.Services.AddSingleton<ILanguageModelRuntime>(model);
+        builder.Services.AddSingleton<IContextBuilder>(new StubContext());
+        builder.Services.AddSingleton<TextReader>(new StringReader("question\n/exit\n"));
+        builder.Services.AddSingleton<TextWriter>(output);
+        builder.Logging.ClearProviders();
+        using var host = builder.Build();
+        var console = host.Services.GetRequiredService<ConsoleApplication>();
 
         await console.RunAsync(CancellationToken.None);
 

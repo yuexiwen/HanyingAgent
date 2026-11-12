@@ -4,7 +4,7 @@
 
 实现存储端口与 Checkpoint 保存机制，隔离内存、文件和数据库等技术差异。
 
-当前没有子目录，已实现工作记忆的进程内存 Store；其他存储与 Checkpoint 机制仍待实现。
+当前已实现工作记忆 Store，以及用户、会话和对话的进程内存 Store；磁盘存储与 Checkpoint 仍待实现。
 
 ## 已有实现
 
@@ -24,6 +24,16 @@
 
 行为测试见 [InMemoryWorkingMemoryStoreTests](../../../TEST/HanyingAgent.Tests/WorkingMemory/InMemoryWorkingMemoryStoreTests.cs)。
 
+### 本地对话 Store
+
+[InMemoryDialogueStore](./InMemoryDialogueStore.cs) 实现 IUserStore、ISessionStore、IConversationStore。
+三个端口共享短锁与集合，使用户存在性、会话归属、关闭检查、消息去重和 Sequence 分配在同一实例内原子执行。
+Store 按管理器传入的可信 owner 验证归属；这些内部端口不是远程授权接口。
+关闭会话与执行 lease 互斥，但不借此伪造 Task 状态，也不提供跨进程锁。
+历史只追加，分页按 Sequence 定位，记录快照不随新消息改变。
+内存操作同步完成，不用 Task.Run 伪造异步 IO；锁内检查取消，已提交的操作不回滚。
+无容量淘汰与磁盘持久化；窗口淘汰的是发送给模型的历史，不删除 Store 记录。
+
 ## 后续组件规划
 
 | 组件 | 一句话概述 |
@@ -41,7 +51,7 @@
 存储不决定记忆分类、权限政策或执行策略；这些由对应业务模块管理。
 长期搜索索引是派生数据，不能代替权威记录；离线或增量索引更新应可恢复并覆盖更新与删除。
 Checkpoint 保存所需工作记忆，不复制整个 User / Global 长期数据集或索引；不序列化锁和取消源。
-Conversation Store 目前只是规划，接口与管理边界见 [Runtime/Conversation](../../Runtime/Conversation/Conversation.md)；
+Conversation Store 的接口与管理边界见 [Runtime/Conversation](../../Runtime/Conversation/Conversation.md)；
 可以与其他模块共用 SQLite 数据库，但不把所有历史内容塞进 SessionInfo。
-User Store 同样只是规划，公共协议见 [Contracts/Users](../../Contracts/Users/Users.md)，存储端口和实现尚未创建。
+User Store 已提供内存版，公共协议见 [Contracts/Users](../../Contracts/Users/Users.md)。
 会话记录必须保存 UserId，未来可为其建立索引；旧记录需要明确迁移归属，不能恢复成默认用户或当前调用者。

@@ -45,6 +45,17 @@ Context 五步最小版共 77 项测试通过，其中 57 项使用手写工作�
 构建使用 `-warnaserror` 通过；本阶段未重跑其余分组或真实 Ollama 联调。
 日志事件编号测试复用上述用例：核对并发执行中的事件编号、名称、顺序及 ExecutionId 隔离，
 并检查非正常交付仍使用 1002，以及失败、取消、超时分别使用 1003、1004、1005。
+
+2026-11-12 会话阶段新增 [DialogueTests](./Conversation/DialogueTests.cs) 的 20 项组合用例，
+覆盖同会话历史、跨会话隔离、10 轮窗口、精确字符边界、分页、归属、幂等并发、快照、
+失败 / 取消 / 保存失败、执行 lease、200 条扫描上限与 Console 命令。
+与 Execution 47 项合并共 67 项通过、0 失败、0 跳过；Release 构建以 `-warnaserror` 验证。
+Debug 中旧应用仍运行，因此本轮不覆盖其输出、不终止该用户进程。
+真实 Ollama 中文两轮姓名问答与新建空会话联调通过，不计入自动化测试数；其余分组本轮未重跑。
+
+```powershell
+dotnet test .\TEST\HanyingAgent.Tests\HanyingAgent.Tests.csproj --no-restore --configuration Release --filter "FullyQualifiedName~HanyingAgent.Tests.Conversation|FullyQualifiedName~HanyingAgent.Tests.Execution" --verbosity minimal -warnaserror
+```
 2026-11-11 全量回归：439 项通过、0 失败、0 跳过（原 418 项加 Host / Execution 21 项），
 使用 `dotnet test .\HanyingAgent.slnx --no-restore --verbosity minimal -warnaserror` 同时验收构建。
 另外通过真实 Console 验证本机模型回答与跨模块相同 ExecutionId，不计入自动化测试数。
@@ -57,6 +68,7 @@ Context 五步最小版共 77 项测试通过，其中 57 项使用手写工作�
 | [Context](./Context/Context.md) | 验证构建请求、字符上限、工作记忆参考数据及真实 Builder + Manager + Store 组合。 |
 | [LanguageModels](./LanguageModels/LanguageModels.md) | 验证 Ollama 原生 HTTP 请求、响应、错误、取消和超时协议。 |
 | [Execution](./Execution/HostExecutionTests.cs) | 验证 Host 配置、DI、单轮执行、关联日志、Console 展示与取消。 |
+| [Conversation](./Conversation/DialogueTests.cs) | 验证用户归属、会话历史、窗口和对话协调的实际组合。 |
 | [Support](./Support/Support.md) | 提供可控 UTC 时钟并测试其行为。 |
 
 ## 运行

@@ -4,7 +4,8 @@
 
 定义长期会话的公共数据与管理能力，使 Host 和 Runtime 能通过统一协议创建、查询、列举和关闭会话。
 
-当前已定义契约，尚未实现 SessionManager、会话存储或任务调度。
+当前已定义契约，本地 Manager 与内存会话存储已实现；正式任务调度仍未实现，
+当前范围见 [Runtime/Sessions](../../Runtime/Sessions/Sessions.md)。
 
 ## 直属子模块
 

@@ -15,4 +15,12 @@ public static class LogEvents
 
     public static readonly EventId ModelInvocationStarted = new(3001, nameof(ModelInvocationStarted));
     public static readonly EventId ModelInvocationReturned = new(3002, nameof(ModelInvocationReturned));
+
+    public static readonly EventId HistoryWindowSelected = new(2003, nameof(HistoryWindowSelected));
+    public static readonly EventId DialogueInputRecorded = new(4001, nameof(DialogueInputRecorded));
+    public static readonly EventId DialogueResponseRecorded = new(4002, nameof(DialogueResponseRecorded));
+    public static readonly EventId DialogueFailed = new(4003, nameof(DialogueFailed));
+    public static readonly EventId DialogueCancelled = new(4004, nameof(DialogueCancelled));
+    public static readonly EventId SessionCommandFailed = new(4005, nameof(SessionCommandFailed));
+    public static readonly EventId DialogueResponseNotRecorded = new(4006, nameof(DialogueResponseNotRecorded));
 }

@@ -5,7 +5,8 @@
 负责 Agent 任务如何被协调和推进，将外部能力组合成可观察、可取消、可恢复的执行过程。
 
 当前 Context 已完成纯文本请求组装、工作记忆接入、总输入字符上限及真实组件组合验收；
-Execution 已实现 DirectExecutor，通过 Console 串联 Context 与模型调用，其余子模块仍为目录骨架。
+Execution 已实现 DirectExecutor；Users、Sessions、Conversation 已接入 Console，
+通过有界历史窗口支持同会话多轮对话。正式 Task 编排和恢复仍未实现。
 
 ## 直属子模块
 
@@ -14,7 +15,9 @@ Execution 已实现 DirectExecutor，通过 Console 串联 Context 与模型调�
 | [Orchestration](./Orchestration/Orchestration.md) | 协调 Session 与任务生命周期并连接执行、状态和恢复流程。 |
 | [Execution](./Execution/Execution.md) | 按 Direct、Prompt Chain 或 ReAct 策略推进任务。 |
 | [Context](./Context/Context.md) | 组装纯文本消息和明确归属的工作记忆，生成本轮 ModelInvocation。 |
-| [Conversation](./Conversation/Conversation.md) | 预留消息追加与历史读取管理，供界面和模型上下文使用。 |
+| [Conversation](./Conversation/Conversation.md) | 管理历史记录并协调输入保存、历史选择、执行和回复保存。 |
+| [Users](./Users/Users.md) | 管理本地用户资料与可信单用户身份上下文。 |
+| [Sessions](./Sessions/Sessions.md) | 管理本地会话和归属，临时保护单会话执行而不伪造 Task 状态。 |
 | [State](./State/State.md) | 管理任务执行位置、合法状态转换和恢复所需进度。 |
 
 ## 设计边界
