@@ -20,6 +20,7 @@ internal sealed class RecordingLoggerProvider : ILoggerProvider, ISupportExterna
     internal sealed record LogEntry(
         string Category,
         LogLevel Level,
+        EventId EventId,
         string Message,
         string? Exception,
         IReadOnlyDictionary<string, object?> Properties);
@@ -42,7 +43,7 @@ internal sealed class RecordingLoggerProvider : ILoggerProvider, ISupportExterna
             provider._scopes.ForEachScope((scope, target) => AddProperties(scope, target), properties);
             AddProperties(state, properties);
             provider.Entries.Enqueue(new LogEntry(
-                category, logLevel, formatter(state, exception), exception?.ToString(), properties));
+                category, logLevel, eventId, formatter(state, exception), exception?.ToString(), properties));
         }
 
         private static void AddProperties(object? state, Dictionary<string, object?> target)

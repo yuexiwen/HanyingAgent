@@ -6,6 +6,7 @@ using HanyingAgent.Contracts.LanguageModels.Models;
 using HanyingAgent.Contracts.LanguageModels.Operations;
 using HanyingAgent.Contracts.LanguageModels.Operations.Requests;
 using HanyingAgent.Contracts.LanguageModels.Operations.Responses;
+using HanyingAgent.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -94,7 +95,7 @@ public sealed class OllamaLanguageModelRuntime : ILanguageModelRuntime
             Content = JsonContent.Create(payload, options: SerializerOptions)
         };
         var started = Stopwatch.GetTimestamp();
-        _logger.LogInformation("Model invocation started: {ModelName}, {MessageCount} messages",
+        _logger.LogInformation(LogEvents.ModelInvocationStarted, "Model invocation started: {ModelName}, {MessageCount} messages",
             modelName, messages.Length);
         using var response = await _client.SendAsync(
             request, HttpCompletionOption.ResponseContentRead, cancellationToken);
@@ -143,6 +144,7 @@ public sealed class OllamaLanguageModelRuntime : ILanguageModelRuntime
             ? null
             : new ModelUsage(result.PromptEvalCount, result.EvalCount);
         _logger.LogInformation(
+            LogEvents.ModelInvocationReturned,
             "Model invocation returned: {FinishReason}, input tokens {InputTokens}, output tokens {OutputTokens}, {ElapsedMs} ms",
             finishReason, result.PromptEvalCount, result.EvalCount, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         return new ModelResponse(

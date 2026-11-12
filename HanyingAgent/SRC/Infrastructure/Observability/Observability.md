@@ -11,6 +11,8 @@
 
 - DirectExecutor 每次执行建立包含 ExecutionId 的 BeginScope，正常异步调用自动继承，独立并发执行使用不同 ID。
 - 执行器记录开始、返回及耗时；失败、主动取消、超时分别记录，未知结束原因不标记为任务完成。
+- 执行返回日志分别记录 Conclusion 与模型 FinishReason；Delivered 使用 Information，
+  截断、未知、拒绝、过滤和不支持动作使用 Warning，不把模型返回误记为成功交付。
 - Context Builder 记录构建开始、最终消息数、记忆数、UTF-16 字符数和耗时。
 - Ollama 适配器记录模型名、消息数、结束原因、Token 用量与耗时。
 - 两个现有组件新增可选 ILogger 参数，原构造方式仍可使用 NullLogger；DI 路径注入真实日志。
@@ -20,6 +22,39 @@
 
 目前只有 ExecutionId，不伪造尚未建立的 TaskId / SessionId；Scope 是日志关联，不是分布式 Trace。
 文件滚动、Activity / OpenTelemetry、指标和事件总线仍未实现。没有将日志作为对话、任务状态或恢复依据。
+
+## 日志事件编号
+
+跨模块事件统一定义于 [LogEvents](../../Diagnostics/LogEvents.cs)，仅包含标准 EventId，
+不引入日志包装或运行逻辑；Runtime 和模型适配器共享此定义，不互相依赖实现。
+
+| 编号 | 事件名 | 级别与含义 |
+|---|---|---|
+| 1001 | ExecutionStarted | Information：一次执行开始。 |
+| 1002 | ExecutionReturned | Delivered 为 Information，其余结论为 Warning；不代表 Task 已完成。 |
+| 1003 | ExecutionFailed | Error：已知执行异常，附异常信息并继续向上抛出。 |
+| 1004 | ExecutionCancelled | Information：调用方取消已被观察到。 |
+| 1005 | ExecutionTimedOutOrDependencyCancelled | Warning：超时或依赖取消，调用方没有请求取消。 |
+| 2001 | ContextBuildStarted | Information：开始构建上下文。 |
+| 2002 | ContextBuildCompleted | Information：上下文构建完成。 |
+| 3001 | ModelInvocationStarted | Information：开始发送模型请求。 |
+| 3002 | ModelInvocationReturned | Information：模型响应解析通过，不代表执行策略正常交付。 |
+
+1000 段用于执行事件，2000 段用于 Context，3000 段用于模型调用。
+事件编号和名称应保持稳定；新增不同语义的事件使用新编号，不复用旧编号。
+框架自己的日志不在本表管理范围内。
+
+EventId 标识事件类型，日志 Category 标识来源组件，ExecutionId 关联一次执行，LogLevel 表达严重程度。
+同一个 1002 事件通过 Conclusion 区分交付结果，不为每种结论和级别组合创建新编号。
+SimpleConsole 自动显示数字编号，例如：
+
+```text
+info: HanyingAgent.Runtime.Execution.DirectExecutor[1001] => ExecutionId:... Execution started
+warn: HanyingAgent.Runtime.Execution.DirectExecutor[1002] => ExecutionId:... Execution returned with Incomplete, ...
+```
+
+事件名作为 EventId.Name 提供给日志 Provider；当前 SimpleConsole 只在方括号里显示数字。
+失败和取消仍只在执行边界记录，不为了编号在 Context 或模型适配器重复记录相同异常。
 
 ## 后续组件规划
 

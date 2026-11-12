@@ -13,6 +13,7 @@
 | [Runtime](./Runtime/Runtime.md) | 协调任务生命周期、执行策略、Context 构建和执行状态。 |
 | [Capabilities](./Capabilities/Capabilities.md) | 实现记忆、技能和工具等可供 Runtime 使用的业务能力。 |
 | [Infrastructure](./Infrastructure/Infrastructure.md) | 实现模型访问、存储和可观测性等技术适配。 |
+| [Diagnostics](./Diagnostics/LogEvents.cs) | 共享跨模块日志事件编号与名称，不承载日志实现或业务逻辑。 |
 
 ## 依赖边界
 

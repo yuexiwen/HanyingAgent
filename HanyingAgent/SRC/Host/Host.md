@@ -9,7 +9,8 @@
 ## 当前实现
 
 - [ApplicationHost](./ApplicationHost.cs) 统一注册配置、日志、记忆、Context、类型化 HTTP 模型客户端和执行器。
-- [ConsoleApplication](./ConsoleApplication.cs) 读取输入并调用 DirectExecutor，显示文本与结束状态。
+- [ConsoleApplication](./ConsoleApplication.cs) 读取输入并调用 DirectExecutor，依据 ExecutionOutcome.Conclusion 展示文本与提示，
+  不再判断 ModelFinishReason 或工具请求是否合法。无有效正文时不打印空 Assistant 行；部分文本保留展示并附非正常交付提示。
 - 程序入口在 Host / DI 捕获 Console.In / Console.Out 之前，将输入与输出统一为无 BOM 的 UTF-8，
   避免 Windows 默认代码页使中文变成问号或乱码。重定向输入也必须由调用方提供 UTF-8 字节。
 - [Configuration](./Configuration) 定义 Ollama 与 Agent 选项，启动时校验；配置来源和命令见[应用文档](../../HanyingAgent.md)。

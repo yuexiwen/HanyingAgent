@@ -14,6 +14,7 @@
 | [Users](./Users/Users.md) | 定义用户标识、资料快照和创建、查询、列举、显示名称更新协议。 |
 | [LanguageModels](./LanguageModels/LanguageModels.md) | 定义类型化消息、工具协议和非流式模型调用、结束原因与用量。 |
 | [Context](./Context/Context.md) | 定义纯文本上下文构建请求与接口，输出既有 ModelInvocation。 |
+| [Execution](./Execution/Execution.md) | 定义执行交付结论与结果，保留诊断元数据，不代替 Task 生命周期。 |
 | [Memory](./Memory/Memory.md) | 定义记忆模型以及工作记忆和长期记忆的访问协议。 |
 | [Tools](./Tools/Tools.md) | 定义工具描述、按任务发现与调用、执行结果和 Observation 协议。 |
 
