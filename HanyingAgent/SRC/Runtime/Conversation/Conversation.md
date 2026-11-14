@@ -16,16 +16,17 @@
 - 默认返回最近 20 条，页内升序；页大小 1–200。游标仅用于向前翻页，绑定会话，
   新消息追加不会改变游标之前的旧页；非法或跨会话游标报错。游标不是授权凭据。
 - 当前仅支持 User 和纯文本 Assistant；Assistant 保留 FinishReason / ProviderFinishReason，
-  可以只记录结束信息。工具历史及非空 TaskId 明确拒绝，避免声称实现了尚不存在的关联校验。
+  可以只记录结束信息。工具历史明确拒绝；TaskId 必须指向该会话的当前非终态任务。
+  任务占用期间禁止追加无 TaskId 的新消息；相同载荷的已有消息重试仍可在任务结束后返回原记录。
 - 工具列表独立快照并只读暴露，重试按内容比较而非集合引用比较；查询和分页不暴露底层集合。
 - Closed 会话可读取，也可返回已有相同消息的重试；不能新增记录。
 
 ## 对话协调
 
-Host 将配置映射为 [DialogueRequest](./DialogueRequest.cs)，Runtime 不依赖 Console 或 Host 配置类型。
+任务编排将不可变执行配置映射为 [DialogueRequest](./DialogueRequest.cs)，Runtime 不依赖 Console 或 Host 配置类型。
 
 ```text
-校验会话并持有临时 turn lease
+Orchestration 已持有任务占用（独立 RespondAsync 入口使用 Session.Active lease）
   → 保存本轮 User，取得 Sequence
   → ConversationWindow 选择该输入之前的历史，并只加入一次当前输入
   → DirectExecutor
@@ -41,6 +42,7 @@ Host 将配置映射为 [DialogueRequest](./DialogueRequest.cs)，Runtime 不依
 异常和取消不回滚已提交记录，也不构成完整事务。
 
 SessionId Scope 覆盖历史选择与执行，DirectExecutor 的 ExecutionId 嵌套其中。
+任务路径继承 Orchestration 的 TaskId Scope，消息输入和输出关联同一 TaskId。
 执行器已有的错误不重复记录；历史读写和会话访问失败由对话协调边界显式记录并抛出。
 
 ## 后续组件规划
@@ -54,7 +56,7 @@ SessionId Scope 覆盖历史选择与执行，DirectExecutor 的 ExecutionId 嵌
 ## 设计边界
 
 - 公共消息及操作协议由 [Contracts/Conversation](../../Contracts/Conversation/Conversation.md) 定义。
-- 具体存储实现位于 [Infrastructure/Persistence](../../Infrastructure/Persistence/Persistence.md)，当前尚未创建 Conversation Store。
+- 具体存储实现位于 [Infrastructure/Persistence](../../Infrastructure/Persistence/Persistence.md)。
 - 通过 SessionId 精确读取记录，不自行构建搜索索引或调用模型。
 - Host 选择会话只加载所需历史；Context 选择模型所需片段，不自动发送整个会话。
 - 追加与读取仍需明确权限、并发顺序及工具结果关联，不能仅依赖客户端提交的 SessionId。

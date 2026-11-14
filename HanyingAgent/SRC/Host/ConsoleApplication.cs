@@ -1,7 +1,4 @@
 using System.Text.Json;
-using HanyingAgent.Contracts.Execution.Models;
-using HanyingAgent.Contracts.LanguageModels.Models;
-using HanyingAgent.Host.Configuration;
 using HanyingAgent.Contracts.Conversation.Models;
 using HanyingAgent.Contracts.Conversation.Operations;
 using HanyingAgent.Contracts.Conversation.Operations.Requests;
@@ -9,17 +6,17 @@ using HanyingAgent.Contracts.Sessions.Models;
 using HanyingAgent.Contracts.Sessions.Operations;
 using HanyingAgent.Contracts.Sessions.Operations.Requests;
 using HanyingAgent.Diagnostics;
-using HanyingAgent.Runtime.Conversation;
+using HanyingAgent.Contracts.Tasks.Models;
+using HanyingAgent.Contracts.Tasks.Operations.Requests;
+using HanyingAgent.Contracts.Tasks.Operations.Responses;
+using HanyingAgent.Runtime.Orchestration;
 using HanyingAgent.Runtime.Users;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace HanyingAgent.Host;
 
 public sealed class ConsoleApplication(
-    IServiceScopeFactory scopeFactory,
-    IOptions<AgentSettings> options,
+    LocalTaskManager tasks,
     ISessionManager sessions,
     IConversationManager conversations,
     LocalUserContext identity,
@@ -29,8 +26,9 @@ public sealed class ConsoleApplication(
 {
     public async Task RunAsync(CancellationToken cancellationToken)
     {
-        await output.WriteLineAsync("HanyingAgent - local in-memory conversations. /new NAME, /sessions, /use ID, /history [CURSOR], /close, /exit. Ctrl+C cancels and exits.");
+        await output.WriteLineAsync("HanyingAgent - local in-memory tasks. /new NAME, /sessions, /use ID, /history [CURSOR], /tasks [CURSOR], /task [ID], /wait [ID], /cancel [ID], /close, /exit. Task commands default to the last submitted task. Exit cancels running tasks.");
         SessionId? current = null;
+        TaskId? lastTask = null;
         try
         {
             var userId = await identity.GetUserIdAsync(cancellationToken);
@@ -106,36 +104,49 @@ public sealed class ConsoleApplication(
                                 current = null;
                                 await output.WriteLineAsync("Session closed. Use /new NAME or /use ID.");
                                 break;
+                            case "/tasks":
+                                var taskPage = await tasks.ListBySessionAsync(new ListSessionTasksRequest(
+                                    RequireCurrent(current), ContinuationToken: argument), cancellationToken);
+                                if (taskPage.Items.Count == 0)
+                                {
+                                    await output.WriteLineAsync("[No tasks in this session.]");
+                                }
+                                foreach (var task in taskPage.Items)
+                                {
+                                    await output.WriteLineAsync($"Task: {task.Id.Value} [{task.Status}] v{task.Version}");
+                                }
+                                if (taskPage.ContinuationToken is { } taskCursor)
+                                {
+                                    await output.WriteLineAsync($"Older tasks: /tasks {taskCursor}");
+                                }
+                                break;
+                            case "/task":
+                                var taskId = ResolveTask(argument, lastTask);
+                                var snapshot = await tasks.GetAsync(taskId, cancellationToken)
+                                    ?? throw new KeyNotFoundException("Task does not exist.");
+                                await output.WriteLineAsync($"Task: {snapshot.Id.Value} [{snapshot.Status}] v{snapshot.Version}");
+                                if (await tasks.GetResultAsync(taskId, cancellationToken) is { } result)
+                                {
+                                    await RenderResultAsync(result);
+                                }
+                                break;
+                            case "/wait":
+                                await RenderResultAsync(await tasks.WaitForResultAsync(
+                                    ResolveTask(argument, lastTask), cancellationToken));
+                                break;
+                            case "/cancel":
+                                var requested = await tasks.CancelAsync(ResolveTask(argument, lastTask), cancellationToken);
+                                await output.WriteLineAsync($"Task: {requested.Id.Value} [{requested.Status}]. Cancellation is confirmed only after execution stops.");
+                                break;
                             default:
                                 throw new ArgumentException("Unknown command or invalid arguments.");
                         }
                         continue;
                     }
-                    var sessionId = RequireCurrent(current);
-                    using var scope = scopeFactory.CreateScope();
-                    var settings = options.Value;
-                    var outcome = await scope.ServiceProvider.GetRequiredService<DialogueCoordinator>()
-                        .RespondAsync(new DialogueRequest(sessionId, line, settings.SystemInstruction,
-                            settings.MaxInputCharacters, settings.MaxHistoryTurns,
-                            new ModelOptions(Temperature: settings.Temperature, MaxOutputTokens: settings.MaxOutputTokens)),
-                            cancellationToken);
-                    if (!string.IsNullOrWhiteSpace(outcome.Text))
-                    {
-                        await output.WriteLineAsync($"Assistant> {outcome.Text}");
-                    }
-                    if (outcome.Conclusion != ExecutionConclusion.Delivered)
-                    {
-                        var status = outcome.Conclusion switch
-                        {
-                            ExecutionConclusion.Incomplete => "Output truncated; this is not a complete answer.",
-                            ExecutionConclusion.Filtered => "Output was filtered.",
-                            ExecutionConclusion.Refused => "The model refused the request.",
-                            ExecutionConclusion.UnsupportedAction => "Tool execution is not supported.",
-                            ExecutionConclusion.Unconfirmed => "Completion is unknown; do not treat this as a complete answer.",
-                            _ => throw new InvalidOperationException("Unsupported execution conclusion.")
-                        };
-                        await output.WriteLineAsync($"[{status}]");
-                    }
+                    var accepted = await tasks.SubmitAsync(
+                        new SubmitTaskRequest(RequireCurrent(current), line), cancellationToken);
+                    lastTask = accepted.Id;
+                    await output.WriteLineAsync($"Task accepted: {accepted.Id.Value}. Use /wait or /task to view the result.");
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 {
@@ -145,10 +156,7 @@ public sealed class ConsoleApplication(
                     ArgumentException or InvalidOperationException or NotSupportedException or
                     KeyNotFoundException or UnauthorizedAccessException or IOException)
                 {
-                    if (line.TrimStart().StartsWith('/') || current is null)
-                    {
-                        logger.LogWarning(LogEvents.SessionCommandFailed, exception, "Session command failed");
-                    }
+                    logger.LogWarning(LogEvents.SessionCommandFailed, exception, "Console operation failed");
                     await output.WriteLineAsync("[Request failed. See logs; you can try another question.]");
                 }
             }
@@ -161,4 +169,21 @@ public sealed class ConsoleApplication(
 
     private static SessionId RequireCurrent(SessionId? current) =>
         current ?? throw new InvalidOperationException("No session selected. Use /new NAME or /use ID.");
+
+    private static TaskId ResolveTask(string? argument, TaskId? lastTask) =>
+        argument is not null ? new TaskId(argument) :
+        lastTask ?? throw new InvalidOperationException("No task submitted. Specify a TaskId.");
+
+    private async Task RenderResultAsync(TaskResult result)
+    {
+        await output.WriteLineAsync($"Task: {result.TaskId.Value} [{result.Status}]");
+        if (!string.IsNullOrWhiteSpace(result.FinalAnswer))
+        {
+            await output.WriteLineAsync($"Assistant> {result.FinalAnswer}");
+        }
+        if (result.Error is { } error)
+        {
+            await output.WriteLineAsync($"[{error}]");
+        }
+    }
 }

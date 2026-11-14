@@ -9,7 +9,8 @@
 Memory、Tools、LanguageModels 和 Conversation 的主要契约；已实现内存工作记忆、Context Builder、
 Ollama 模型适配器，以及 Generic Host / DI、关联日志和 DirectExecutor 驱动的 Console。
 当前已实现可信本地单用户、内存 Session / Conversation 和有界多轮历史窗口；
-正式任务编排、工具与恢复流程仍待实现，会话执行期保护不等同完整 Task 生命周期。
+最小 Direct 任务编排已实现：后台运行、状态与结果查询、取消和 Session 原子占用；
+工具循环、等待用户与恢复流程仍待实现。具体当前范围见 [Orchestration](../HanyingAgent/SRC/Runtime/Orchestration/Orchestration.md)。
 
 逻辑模块不等于独立进程或项目，Contracts 中的数据类型也不等于保存数据或执行业务的实现。
 项目入口见 [HanyingAgent](../HanyingAgent/HanyingAgent.md)。

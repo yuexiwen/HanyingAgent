@@ -8,6 +8,7 @@ using HanyingAgent.Diagnostics;
 using HanyingAgent.Runtime.Context;
 using HanyingAgent.Runtime.Execution;
 using HanyingAgent.Runtime.Sessions;
+using HanyingAgent.Contracts.Tasks.Models;
 using Microsoft.Extensions.Logging;
 
 namespace HanyingAgent.Runtime.Conversation;
@@ -20,7 +21,15 @@ public sealed class DialogueCoordinator(
     ILogger<DialogueCoordinator> logger)
 {
     public async Task<ExecutionOutcome> RespondAsync(
-        DialogueRequest request, CancellationToken cancellationToken)
+        DialogueRequest request, CancellationToken cancellationToken) =>
+        await RespondCoreAsync(request, null, null, cancellationToken);
+
+    internal Task<ExecutionOutcome> RespondTaskAsync(
+        DialogueRequest request, TaskId taskId, Action waitingForModel, CancellationToken cancellationToken) =>
+        RespondCoreAsync(request, taskId, waitingForModel, cancellationToken);
+
+    private async Task<ExecutionOutcome> RespondCoreAsync(
+        DialogueRequest request, TaskId? taskId, Action? waitingForModel, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Input);
@@ -28,11 +37,11 @@ public sealed class DialogueCoordinator(
         var phase = "AcquireSession";
         try
         {
-            using var lease = await sessions.BeginTurnAsync(sessionId, cancellationToken);
-            using var scope = logger.BeginScope("SessionId:{SessionId}", sessionId.Value);
+            using var lease = taskId is null ? await sessions.BeginTurnAsync(sessionId, cancellationToken) : null;
+            using var scope = taskId is null ? logger.BeginScope("SessionId:{SessionId}", sessionId.Value) : null;
             phase = "SaveUser";
             var current = await conversations.AppendAsync(new AppendConversationMessageRequest(
-                new MessageId(Guid.NewGuid().ToString("N")), sessionId, null, new UserConversationContent(request.Input)),
+                new MessageId(Guid.NewGuid().ToString("N")), sessionId, taskId, new UserConversationContent(request.Input)),
                 cancellationToken);
             logger.LogInformation(LogEvents.DialogueInputRecorded,
                 "Dialogue input recorded: {MessageId}, sequence {Sequence}", current.Id.Value, current.Sequence);
@@ -40,6 +49,8 @@ public sealed class DialogueCoordinator(
             var messages = await window.SelectAsync(current, request.SystemInstruction,
                 request.MaxInputCharacters, request.MaxHistoryTurns, cancellationToken);
             phase = "Execute";
+            waitingForModel?.Invoke();
+            cancellationToken.ThrowIfCancellationRequested();
             var outcome = await executor.ExecuteAsync(new BuildContextRequest(
                 request.SystemInstruction, messages, [], request.Options),
                 cancellationToken);
@@ -52,7 +63,7 @@ public sealed class DialogueCoordinator(
             }
             // A response already exists. Saving failure must not trigger a second model invocation.
             var assistant = await conversations.AppendAsync(new AppendConversationMessageRequest(
-                new MessageId(Guid.NewGuid().ToString("N")), sessionId, null,
+                new MessageId(Guid.NewGuid().ToString("N")), sessionId, taskId,
                 new AssistantConversationContent(outcome.Text, [], outcome.FinishReason, outcome.ProviderFinishReason)),
                 cancellationToken);
             logger.LogInformation(LogEvents.DialogueResponseRecorded,

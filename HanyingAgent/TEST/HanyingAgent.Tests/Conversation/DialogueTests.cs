@@ -164,7 +164,7 @@ public sealed class DialogueTests
     }
 
     [Fact]
-    public async Task ActiveTurn_RejectsConcurrentTurnAndCloseWithoutFakingActiveTaskStatus()
+    public async Task ActiveTurn_RejectsConcurrentTurnAndCloseWithoutInventingTaskId()
     {
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -184,7 +184,7 @@ public sealed class DialogueTests
             await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Respond(session.Id, "two"));
             await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Sessions.CloseAsync(session.Id, CancellationToken.None));
             var snapshot = await fixture.Sessions.GetAsync(session.Id, CancellationToken.None);
-            Assert.Equal(SessionStatus.Idle, snapshot!.Status);
+            Assert.Equal(SessionStatus.Active, snapshot!.Status);
             Assert.Null(snapshot.CurrentTaskId);
         }
         finally
@@ -379,11 +379,13 @@ public sealed class DialogueTests
         await fixture.Respond(previous.Id, "prior");
         using var output = new StringWriter();
         using var input = new StringReader(
-            $"/use {previous.Id.Value}\nfollow-up\n/history\n/new Other\n/history\nfresh\n/sessions\n/close\n" +
-            $"cannot-send\n/use {previous.Id.Value}\nback\n/unknown\n/exit\n");
+            $"/use {previous.Id.Value}\nfollow-up\n/wait\n/history\n/new Other\n/history\nfresh\n/wait\n/sessions\n/close\n" +
+            $"cannot-send\n/use {previous.Id.Value}\nback\n/wait\n/unknown\n/exit\n");
         var console = ActivatorUtilities.CreateInstance<ConsoleApplication>(fixture.Host.Services, input, output);
 
+        await fixture.Host.StartAsync();
         await console.RunAsync(CancellationToken.None);
+        await fixture.Host.StopAsync();
 
         Assert.Equal(4, model.Invocations.Count);
         Assert.Contains("prior", Texts(model.Invocations[1]));

@@ -8,17 +8,17 @@ using HanyingAgent.Contracts.Users.Models;
 using HanyingAgent.Runtime.Conversation;
 using HanyingAgent.Runtime.Sessions;
 using HanyingAgent.Runtime.Users;
+using HanyingAgent.Runtime.Orchestration;
 
 namespace HanyingAgent.Infrastructure.Persistence;
 
-public sealed class InMemoryDialogueStore : IUserStore, ISessionStore, IConversationStore
+public sealed partial class InMemoryDialogueStore : IUserStore, ISessionStore, IConversationStore, ITaskStore
 {
     private readonly object _gate = new();
     private readonly Dictionary<UserId, UserInfo> _users = new();
     private readonly Dictionary<SessionId, SessionInfo> _sessions = new();
     private readonly Dictionary<MessageId, ConversationMessage> _messages = new();
     private readonly Dictionary<SessionId, List<ConversationMessage>> _history = new();
-    private readonly HashSet<SessionId> _busy = new();
 
     public UserInfo Add(string displayName, DateTimeOffset now, CancellationToken cancellationToken)
     {
@@ -104,7 +104,7 @@ public sealed class InMemoryDialogueStore : IUserStore, ISessionStore, IConversa
         {
             cancellationToken.ThrowIfCancellationRequested();
             var session = RequireSession(id, owner);
-            if (_busy.Contains(id) || session.Status == SessionStatus.Active)
+            if (session.Status == SessionStatus.Active)
             {
                 throw new InvalidOperationException("Cannot close a session with an active execution.");
             }
@@ -128,10 +128,7 @@ public sealed class InMemoryDialogueStore : IUserStore, ISessionStore, IConversa
         {
             cancellationToken.ThrowIfCancellationRequested();
             RequireWritableSession(id, owner);
-            if (!_busy.Add(id))
-            {
-                throw new InvalidOperationException("This session already has an execution in progress.");
-            }
+            _sessions[id] = _sessions[id] with { Status = SessionStatus.Active };
             return new TurnLease(this, id);
         }
     }
@@ -153,7 +150,22 @@ public sealed class InMemoryDialogueStore : IUserStore, ISessionStore, IConversa
                 }
                 return existing;
             }
-            RequireWritableSession(request.SessionId, owner);
+            if (session.Status == SessionStatus.Closed)
+            {
+                throw new InvalidOperationException("Session is closed.");
+            }
+            if (request.TaskId is { } taskId)
+            {
+                var task = RequireTask(taskId, owner);
+                if (task.SessionId != session.Id || session.CurrentTaskId != taskId || IsTerminal(task.Status))
+                {
+                    throw new InvalidOperationException("Message task is not the active task of this session.");
+                }
+            }
+            else if (session.CurrentTaskId is not null)
+            {
+                throw new InvalidOperationException("Messages in a task-owned session require its TaskId.");
+            }
             var history = _history[request.SessionId];
             var message = new ConversationMessage(request.Id, request.SessionId, request.TaskId,
                 checked((long)history.Count + 1), content, now);
@@ -259,7 +271,11 @@ public sealed class InMemoryDialogueStore : IUserStore, ISessionStore, IConversa
             {
                 lock (store._gate)
                 {
-                    store._busy.Remove(id);
+                    var session = store._sessions[id];
+                    if (session.Status == SessionStatus.Active && session.CurrentTaskId is null)
+                    {
+                        store._sessions[id] = session with { Status = SessionStatus.Idle };
+                    }
                 }
             }
         }

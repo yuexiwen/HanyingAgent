@@ -50,6 +50,7 @@ public sealed class HostExecutionTests
             var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
             var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
             await process.StandardInput.WriteLineAsync(question);
+            await process.StandardInput.WriteLineAsync("/wait");
             await process.StandardInput.WriteLineAsync("/exit");
             process.StandardInput.Close();
 
@@ -115,7 +116,7 @@ public sealed class HostExecutionTests
         var handler = new RecordingHandler();
         var logs = new RecordingLoggerProvider();
         using var output = new StringWriter();
-        using var host = CreateHost(handler, logs, new StringReader("\nfirst-private-input\nsecond-private-input\n/exit\n"), output,
+        using var host = CreateHost(handler, logs, new StringReader("\nfirst-private-input\n/wait\nsecond-private-input\n/wait\n/exit\n"), output,
             "--Ollama:BaseAddress=http://localhost/proxy/",
             "--Ollama:ModelName=configured-model",
             "--Ollama:ContextWindowTokens=2048",
@@ -123,7 +124,9 @@ public sealed class HostExecutionTests
             "--Agent:Temperature=0",
             "--Agent:MaxOutputTokens=32");
 
+        await host.StartAsync();
         await host.Services.GetRequiredService<ConsoleApplication>().RunAsync(CancellationToken.None);
+        await host.StopAsync();
 
         Assert.Equal(2, handler.Requests.Count);
         var requestIndex = 0;
@@ -234,9 +237,11 @@ public sealed class HostExecutionTests
         }));
         var logs = new RecordingLoggerProvider();
         using var output = new StringWriter();
-        using var host = CreateHost(handler, logs, new StringReader("one\ntwo\nthree\n/exit\n"), output);
+        using var host = CreateHost(handler, logs, new StringReader("one\n/wait\ntwo\n/wait\nthree\n/wait\n/exit\n"), output);
 
+        await host.StartAsync();
         await host.Services.GetRequiredService<ConsoleApplication>().RunAsync(CancellationToken.None);
+        await host.StopAsync();
 
         var text = output.ToString();
         Assert.Equal(3, handler.Requests.Count);
@@ -261,13 +266,15 @@ public sealed class HostExecutionTests
         });
         var logs = new RecordingLoggerProvider();
         using var output = new StringWriter();
-        using var host = CreateHost(handler, logs, new StringReader("one\n"), output);
+        using var host = CreateHost(handler, logs, new StringReader("one\n/wait\n"), output);
         using var cancellation = new CancellationTokenSource();
 
+        await host.StartAsync();
         var run = host.Services.GetRequiredService<ConsoleApplication>().RunAsync(cancellation.Token);
         await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
         cancellation.Cancel();
         await run.WaitAsync(TimeSpan.FromSeconds(10));
+        await host.StopAsync();
 
         Assert.Contains("Cancelled. Exiting.", output.ToString());
         Assert.DoesNotContain("Assistant>", output.ToString());
@@ -293,17 +300,19 @@ public sealed class HostExecutionTests
         });
         var logs = new RecordingLoggerProvider();
         using var output = new StringWriter();
-        using var host = CreateHost(handler, logs, new StringReader("one\ntwo\n/exit\n"), output,
+        using var host = CreateHost(handler, logs, new StringReader("one\n/wait\ntwo\n/wait\n/exit\n"), output,
             "--Ollama:TimeoutSeconds=1");
 
+        await host.StartAsync();
         await host.Services.GetRequiredService<ConsoleApplication>().RunAsync(CancellationToken.None)
             .WaitAsync(TimeSpan.FromSeconds(10));
+        await host.StopAsync();
 
         Assert.Equal(2, handler.Requests.Count);
         Assert.Contains("Request timed out", output.ToString());
         Assert.Contains("Assistant> private-answer", output.ToString());
         Assert.DoesNotContain("Cancelled. Exiting.", output.ToString());
-        var timeout = Assert.Single(logs.Entries, entry => entry.Level == LogLevel.Warning);
+        var timeout = Assert.Single(logs.Entries, entry => entry.EventId.Id == 1005);
         Assert.Equal(1005, timeout.EventId.Id);
         Assert.Equal("ExecutionTimedOutOrDependencyCancelled", timeout.EventId.Name);
     }

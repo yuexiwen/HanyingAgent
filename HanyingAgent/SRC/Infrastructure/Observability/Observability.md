@@ -22,7 +22,8 @@
 
 对话协调建立真实 SessionId Scope，内部 DirectExecutor 再嵌套 ExecutionId。
 历史选择和记录事件携带 SessionId，执行、Context 与模型事件同时携带两者。
-仍不伪造尚未建立的 TaskId；Scope 是日志关联，不是分布式 Trace。
+正式任务路径继承 LocalTaskManager 的 TaskId Scope，执行、Context 与模型事件同时携带三个 ID；
+独立对话入口不伪造 TaskId。Scope 是日志关联，不是分布式 Trace。
 文件滚动、Activity / OpenTelemetry、指标和事件总线仍未实现。没有将日志作为对话、任务状态或恢复依据。
 
 ## 日志事件编号
@@ -48,8 +49,17 @@
 | 4004 | DialogueCancelled | Information：非模型执行阶段观察到取消。 |
 | 4005 | SessionCommandFailed | Warning：会话命令或没有当前会话时的操作失败。 |
 | 4006 | DialogueResponseNotRecorded | Warning：不支持的动作没有伪装成普通文本历史。 |
+| 5001 | TaskAccepted | Information：接受任务，携带 TaskId、SessionId 和版本。 |
+| 5002 | TaskStateChanged | Information：任务状态与版本变化。 |
+| 5003 | TaskCancellationRequested | Information：业务取消请求快照，不表示执行已停止。 |
+| 5004 | TaskFinished | Failed 为 Warning，其余 Information；终态结果与 Session 释放已提交。 |
+| 5005 | TaskServiceStopping | Information：停止接受任务，等待运行中的执行收尾。 |
+| 5006 | TaskUnexpectedFailure | Error：后台边界记录未预期执行异常，任务转为 Failed。 |
+| 5007 | TaskFinalizationFailed | Critical：终态保存或释放未确认，不伪装成正常结束。 |
+| 5008 | TaskCancellationFailed | Error：取消回调失败，附异常并传播。 |
+| 5009 | TaskExecutionFailed | Warning：任务层的已知异常摘要，不自动重试。 |
 
-1000 段用于执行事件，2000 段用于 Context，3000 段用于模型调用，4000 段用于对话协调与会话命令。
+1000 段用于执行事件，2000 段用于 Context，3000 段用于模型调用，4000 段用于对话协调与会话命令，5000 段用于任务。
 事件编号和名称应保持稳定；新增不同语义的事件使用新编号，不复用旧编号。
 框架自己的日志不在本表管理范围内。
 
@@ -63,7 +73,8 @@ warn: HanyingAgent.Runtime.Execution.DirectExecutor[1002] => ExecutionId:... Exe
 ```
 
 事件名作为 EventId.Name 提供给日志 Provider；当前 SimpleConsole 只在方括号里显示数字。
-失败和取消仍只在执行边界记录，不为了编号在 Context 或模型适配器重复记录相同异常。
+模型执行失败仍由执行边界记录 Error，任务层记录 Warning 摘要和终态；
+不为了编号在 Context 或模型适配器重复记录相同异常。
 
 ## 后续组件规划
 

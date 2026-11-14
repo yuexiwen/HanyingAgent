@@ -29,4 +29,4 @@ ConversationContent 不继承 ModelMessage：历史保存事实和结束信息�
 MessageId 由可信调用方在首次追加前生成，重试复用；服务端分配 Sequence 和 CreatedAt。
 首次读取默认最近 20 条，页内 Sequence 升序，使用不透明游标继续读取更早消息。
 DTO 本身不实现去重、排序或权限控制；这些由本地 Manager 与 Store 共同兑现。
-工具历史与任务关联尚未实现，本地版本对此明确拒绝，而非静默丢弃。
+工具历史仍明确拒绝；任务关联已实现，Store 校验 Task 存在、归属及当前会话占用，而非仅相信提交的 TaskId。
