@@ -4,7 +4,9 @@
 
 定义一次 Agent 工作请求的身份、Session 归属、生命周期和操作协议；一个任务可以包含多轮模型调用、工具动作和用户补充。
 
-当前只定义契约，没有任务调度、执行器、任务存储或状态转换实现。
+当前由 [LocalTaskManager](../../Runtime/Orchestration/LocalTaskManager.cs) 实现可信本地 Direct 任务闭环，
+包括内存存储、后台运行、查询和取消；详细语义见 [Orchestration](../../Runtime/Orchestration/Orchestration.md)。
+契约保留等待工具和用户等未来状态，本阶段不进入这些状态，ProvideInput 明确拒绝。
 
 ## 直属子模块
 

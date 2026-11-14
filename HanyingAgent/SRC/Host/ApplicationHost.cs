@@ -13,6 +13,9 @@ using HanyingAgent.Contracts.Conversation.Operations;
 using HanyingAgent.Runtime.Users;
 using HanyingAgent.Runtime.Sessions;
 using HanyingAgent.Runtime.Conversation;
+using HanyingAgent.Runtime.Orchestration;
+using HanyingAgent.Contracts.Tasks.Operations;
+using HanyingAgent.Contracts.LanguageModels.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -89,6 +92,7 @@ public static class ApplicationHost
         builder.Services.AddSingleton<IUserStore>(services => services.GetRequiredService<InMemoryDialogueStore>());
         builder.Services.AddSingleton<ISessionStore>(services => services.GetRequiredService<InMemoryDialogueStore>());
         builder.Services.AddSingleton<IConversationStore>(services => services.GetRequiredService<InMemoryDialogueStore>());
+        builder.Services.AddSingleton<ITaskStore>(services => services.GetRequiredService<InMemoryDialogueStore>());
         builder.Services.AddSingleton<IUserManager, LocalUserManager>();
         builder.Services.AddSingleton<LocalUserContext>();
         builder.Services.AddSingleton<LocalSessionManager>();
@@ -96,6 +100,16 @@ public static class ApplicationHost
         builder.Services.AddSingleton<IConversationManager, LocalConversationManager>();
         builder.Services.AddSingleton<ConversationWindow>();
         builder.Services.AddTransient<DialogueCoordinator>();
+        builder.Services.AddSingleton(services =>
+        {
+            var settings = services.GetRequiredService<IOptions<AgentSettings>>().Value;
+            return new TaskExecutionOptions(settings.SystemInstruction, settings.MaxInputCharacters,
+                settings.MaxHistoryTurns,
+                new ModelOptions(Temperature: settings.Temperature, MaxOutputTokens: settings.MaxOutputTokens));
+        });
+        builder.Services.AddSingleton<LocalTaskManager>();
+        builder.Services.AddSingleton<ITaskManager>(services => services.GetRequiredService<LocalTaskManager>());
+        builder.Services.AddHostedService(services => services.GetRequiredService<LocalTaskManager>());
         builder.Services.AddSingleton<TextReader>(Console.In);
         builder.Services.AddSingleton<TextWriter>(Console.Out);
         builder.Services.AddSingleton<ConsoleApplication>();

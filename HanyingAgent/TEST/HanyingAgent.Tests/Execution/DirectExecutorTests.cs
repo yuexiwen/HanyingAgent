@@ -164,13 +164,15 @@ public sealed class DirectExecutorTests
         var builder = ApplicationHost.CreateBuilder([]);
         builder.Services.AddSingleton<ILanguageModelRuntime>(model);
         builder.Services.AddSingleton<IContextBuilder>(new StubContext());
-        builder.Services.AddSingleton<TextReader>(new StringReader("question\n/exit\n"));
+        builder.Services.AddSingleton<TextReader>(new StringReader("question\n/wait\n/exit\n"));
         builder.Services.AddSingleton<TextWriter>(output);
         builder.Logging.ClearProviders();
         using var host = builder.Build();
         var console = host.Services.GetRequiredService<ConsoleApplication>();
 
+        await host.StartAsync();
         await console.RunAsync(CancellationToken.None);
+        await host.StopAsync();
 
         Assert.Contains(expectedMessage, output.ToString());
         if (text is null)

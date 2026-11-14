@@ -4,7 +4,7 @@
 
 实现存储端口与 Checkpoint 保存机制，隔离内存、文件和数据库等技术差异。
 
-当前已实现工作记忆 Store，以及用户、会话和对话的进程内存 Store；磁盘存储与 Checkpoint 仍待实现。
+当前已实现工作记忆 Store，以及用户、会话、对话和任务的进程内存 Store；磁盘存储与 Checkpoint 仍待实现。
 
 ## 已有实现
 
@@ -26,13 +26,18 @@
 
 ### 本地对话 Store
 
-[InMemoryDialogueStore](./InMemoryDialogueStore.cs) 实现 IUserStore、ISessionStore、IConversationStore。
-三个端口共享短锁与集合，使用户存在性、会话归属、关闭检查、消息去重和 Sequence 分配在同一实例内原子执行。
+[InMemoryDialogueStore](./InMemoryDialogueStore.cs) 实现 IUserStore、ISessionStore、IConversationStore、ITaskStore。
+四个端口共享短锁与集合，使用户存在性、会话归属、关闭检查、消息去重和 Sequence 分配在同一实例内原子执行。
 Store 按管理器传入的可信 owner 验证归属；这些内部端口不是远程授权接口。
-关闭会话与执行 lease 互斥，但不借此伪造 Task 状态，也不提供跨进程锁。
+关闭会话与 Session.Active 占用互斥；独立对话 lease 与正式任务使用同一状态，不提供跨进程锁。
 历史只追加，分页按 Sequence 定位，记录快照不随新消息改变。
 内存操作同步完成，不用 Task.Run 伪造异步 IO；锁内检查取消，已提交的操作不回滚。
 无容量淘汰与磁盘持久化；窗口淘汰的是发送给模型的历史，不删除 Store 记录。
+
+[任务存储实现](./InMemoryDialogueStore.Tasks.cs) 在同一短锁内创建 Task 并占用 Session，
+更新状态与 Version，以及提交终态结果并释放 Session。结果记录只写一次，迟到的旧任务收尾不释放新占用。
+任务按会话提交顺序分页，不依赖时钟或随机 ID 排序；消息追加校验 Task 与 Session 当前关联。
+锁内不调用模型、等待异步执行或触发取消回调。本地执行句柄和取消源由 Orchestration 管理。
 
 ## 后续组件规划
 

@@ -18,9 +18,9 @@ public sealed class LocalConversationManager(
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Id.Value);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.SessionId.Value);
-        if (request.TaskId is not null)
+        if (request.TaskId is { } taskId)
         {
-            throw new NotSupportedException("Task association requires the future task manager.");
+            ArgumentException.ThrowIfNullOrWhiteSpace(taskId.Value);
         }
         var content = SnapshotContent(request.Content);
         return store.Append(request with { Content = content }, await identity.GetUserIdAsync(cancellationToken),
