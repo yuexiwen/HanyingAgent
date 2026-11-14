@@ -49,6 +49,7 @@
 | 4004 | DialogueCancelled | Information：非模型执行阶段观察到取消。 |
 | 4005 | SessionCommandFailed | Warning：会话命令或没有当前会话时的操作失败。 |
 | 4006 | DialogueResponseNotRecorded | Warning：不支持的动作没有伪装成普通文本历史。 |
+| 4007 | ConsoleTaskNotificationFailed | Error：Console 结果通知失败，提示显式查询；退出时也观察等待异常。 |
 | 5001 | TaskAccepted | Information：接受任务，携带 TaskId、SessionId 和版本。 |
 | 5002 | TaskStateChanged | Information：任务状态与版本变化。 |
 | 5003 | TaskCancellationRequested | Information：业务取消请求快照，不表示执行已停止。 |

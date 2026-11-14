@@ -12,6 +12,7 @@ using HanyingAgent.Contracts.Tasks.Operations.Responses;
 using HanyingAgent.Runtime.Orchestration;
 using HanyingAgent.Runtime.Users;
 using Microsoft.Extensions.Logging;
+using TaskStatus = HanyingAgent.Contracts.Tasks.Models.TaskStatus;
 
 namespace HanyingAgent.Host;
 
@@ -26,9 +27,14 @@ public sealed class ConsoleApplication(
 {
     public async Task RunAsync(CancellationToken cancellationToken)
     {
-        await output.WriteLineAsync("HanyingAgent - local in-memory tasks. /new NAME, /sessions, /use ID, /history [CURSOR], /tasks [CURSOR], /task [ID], /wait [ID], /cancel [ID], /close, /exit. Task commands default to the last submitted task. Exit cancels running tasks.");
+        await output.WriteLineAsync("HanyingAgent - local in-memory tasks. Replies appear automatically. /new NAME, /session [ID], /sessions, /use ID, /history [CURSOR], /tasks [CURSOR], /task [ID], /wait [ID], /cancel [ID], /close, /exit. Task commands default to the last submitted task. Exit cancels running tasks.");
         SessionId? current = null;
         TaskId? lastTask = null;
+        var pending = new Dictionary<TaskId, PendingResult>();
+        var unread = new Dictionary<TaskId, SessionResult>();
+        var displayed = new HashSet<TaskId>();
+        Task<string?>? read = null;
+        using var notifications = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         try
         {
             var userId = await identity.GetUserIdAsync(cancellationToken);
@@ -36,11 +42,64 @@ public sealed class ConsoleApplication(
             await output.WriteLineAsync($"Session: {current.Value.Value} (Default)");
             while (!cancellationToken.IsCancellationRequested)
             {
-                await output.WriteAsync("You> ");
-                await output.FlushAsync();
-                // Console's synchronous reader cannot interrupt a pending read; shutdown stops waiting for it.
-                var line = await Task.Run(() => input.ReadLine(), CancellationToken.None)
+                var ready = pending.Where(item => item.Value.Completion.IsCompleted).ToArray();
+                var hasNotifications = ready.Any(item => !displayed.Contains(item.Key));
+                if (hasNotifications && read is not null)
+                {
+                    await output.WriteLineAsync();
+                }
+                foreach (var (id, update) in ready)
+                {
+                    pending.Remove(id);
+                    try
+                    {
+                        var result = await update.Completion;
+                        if (displayed.Contains(id))
+                        {
+                            continue;
+                        }
+                        if (update.SessionId == current)
+                        {
+                            await RenderResultAsync(result);
+                            displayed.Add(id);
+                        }
+                        else
+                        {
+                            unread[id] = new SessionResult(update.SessionId, result);
+                            await output.WriteLineAsync(
+                                $"[Session: {update.SessionId.Value}, Task: {id.Value} [{result.Status}]. Use /use {update.SessionId.Value} to view the update.]");
+                            if (result.Error is { } error)
+                            {
+                                await output.WriteLineAsync($"[Task: {id.Value}: {error}]");
+                            }
+                        }
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception exception)
+                    {
+                        logger.LogError(LogEvents.ConsoleTaskNotificationFailed, exception,
+                            "Task result notification failed for {TaskId}", id.Value);
+                        await output.WriteLineAsync($"[Result notification failed for task {id.Value}. Use /task {id.Value}. See logs.]");
+                    }
+                }
+                if (read is null || hasNotifications)
+                {
+                    await output.WriteAsync("You> ");
+                    await output.FlushAsync();
+                }
+                // Keep one read in flight while results wake the output loop; never read a second line concurrently.
+                read ??= Task.Run(() => input.ReadLine(), CancellationToken.None);
+                var completed = await Task.WhenAny([read, .. pending.Values.Select(item => item.Completion)])
                     .WaitAsync(cancellationToken);
+                if (completed != read)
+                {
+                    continue;
+                }
+                var line = await read;
+                read = null;
                 if (line is null || line.Trim().Equals("/exit", StringComparison.OrdinalIgnoreCase))
                 {
                     break;
@@ -62,20 +121,34 @@ public sealed class ConsoleApplication(
                                 ArgumentException.ThrowIfNullOrWhiteSpace(argument);
                                 var created = await sessions.CreateAsync(new CreateSessionRequest(userId, argument), cancellationToken);
                                 current = created.Id;
-                                await output.WriteLineAsync($"Session: {created.Id.Value} ({created.Name})");
+                                await RenderSessionAsync(created, current, cancellationToken);
                                 break;
                             case "/sessions" when argument is null:
                                 foreach (var session in await sessions.ListAsync(cancellationToken))
                                 {
-                                    await output.WriteLineAsync($"{(session.Id == current ? "*" : " ")} {session.Id.Value} {session.Name} [{session.Status}]");
+                                    var sessionTask = await GetSessionTaskAsync(session, cancellationToken);
+                                    await output.WriteLineAsync(
+                                        $"{(session.Id == current ? "*" : " ")} {session.Id.Value} {session.Name} [{session.Status}] | {DescribeSessionTask(sessionTask)}");
                                 }
+                                break;
+                            case "/session":
+                                var requestedSessionId = argument is null ? RequireCurrent(current) : new SessionId(argument);
+                                var requestedSession = await sessions.GetAsync(requestedSessionId, cancellationToken)
+                                    ?? throw new KeyNotFoundException("Session does not exist.");
+                                await RenderSessionAsync(requestedSession, current, cancellationToken);
                                 break;
                             case "/use":
                                 ArgumentException.ThrowIfNullOrWhiteSpace(argument);
                                 var selected = await sessions.GetAsync(new SessionId(argument), cancellationToken)
                                     ?? throw new KeyNotFoundException("Session does not exist.");
                                 current = selected.Id;
-                                await output.WriteLineAsync($"Session: {selected.Id.Value} ({selected.Name}) [{selected.Status}]");
+                                await RenderSessionAsync(selected, current, cancellationToken);
+                                foreach (var (id, update) in unread.Where(item => item.Value.SessionId == current).ToArray())
+                                {
+                                    await RenderResultAsync(update.Result);
+                                    displayed.Add(id);
+                                    unread.Remove(id);
+                                }
                                 break;
                             case "/history":
                                 var page = await conversations.ListBySessionAsync(new ListConversationMessagesRequest(
@@ -127,12 +200,17 @@ public sealed class ConsoleApplication(
                                 await output.WriteLineAsync($"Task: {snapshot.Id.Value} [{snapshot.Status}] v{snapshot.Version}");
                                 if (await tasks.GetResultAsync(taskId, cancellationToken) is { } result)
                                 {
-                                    await RenderResultAsync(result);
+                                    await RenderResultAsync(result, includeStatus: false);
+                                    displayed.Add(taskId);
+                                    unread.Remove(taskId);
                                 }
                                 break;
                             case "/wait":
-                                await RenderResultAsync(await tasks.WaitForResultAsync(
-                                    ResolveTask(argument, lastTask), cancellationToken));
+                                var waitingId = ResolveTask(argument, lastTask);
+                                var waited = await tasks.WaitForResultAsync(waitingId, cancellationToken);
+                                await RenderResultAsync(waited, includeBody: !displayed.Contains(waitingId));
+                                displayed.Add(waitingId);
+                                unread.Remove(waitingId);
                                 break;
                             case "/cancel":
                                 var requested = await tasks.CancelAsync(ResolveTask(argument, lastTask), cancellationToken);
@@ -146,7 +224,9 @@ public sealed class ConsoleApplication(
                     var accepted = await tasks.SubmitAsync(
                         new SubmitTaskRequest(RequireCurrent(current), line), cancellationToken);
                     lastTask = accepted.Id;
-                    await output.WriteLineAsync($"Task accepted: {accepted.Id.Value}. Use /wait or /task to view the result.");
+                    pending.Add(accepted.Id, new PendingResult(accepted.SessionId,
+                        tasks.WaitForResultAsync(accepted.Id, notifications.Token)));
+                    await output.WriteLineAsync($"Task accepted: {accepted.Id.Value}. The result will appear automatically.");
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 {
@@ -165,6 +245,26 @@ public sealed class ConsoleApplication(
         {
             await output.WriteLineAsync("[Cancelled. Exiting.]");
         }
+        finally
+        {
+            // Stop result waits, not business tasks; Host owns task cancellation and shutdown.
+            await notifications.CancelAsync();
+            foreach (var (id, update) in pending)
+            {
+                try
+                {
+                    await update.Completion;
+                }
+                catch (OperationCanceledException) when (notifications.IsCancellationRequested)
+                {
+                }
+                catch (Exception exception)
+                {
+                    logger.LogError(LogEvents.ConsoleTaskNotificationFailed, exception,
+                        "Task result notification failed during console exit for {TaskId}", id.Value);
+                }
+            }
+        }
     }
 
     private static SessionId RequireCurrent(SessionId? current) =>
@@ -174,9 +274,16 @@ public sealed class ConsoleApplication(
         argument is not null ? new TaskId(argument) :
         lastTask ?? throw new InvalidOperationException("No task submitted. Specify a TaskId.");
 
-    private async Task RenderResultAsync(TaskResult result)
+    private async Task RenderResultAsync(TaskResult result, bool includeStatus = true, bool includeBody = true)
     {
-        await output.WriteLineAsync($"Task: {result.TaskId.Value} [{result.Status}]");
+        if (includeStatus)
+        {
+            await output.WriteLineAsync($"Task: {result.TaskId.Value} [{result.Status}]");
+        }
+        if (!includeBody)
+        {
+            return;
+        }
         if (!string.IsNullOrWhiteSpace(result.FinalAnswer))
         {
             await output.WriteLineAsync($"Assistant> {result.FinalAnswer}");
@@ -186,4 +293,41 @@ public sealed class ConsoleApplication(
             await output.WriteLineAsync($"[{error}]");
         }
     }
+
+    private async Task RenderSessionAsync(SessionInfo session, SessionId? current, CancellationToken token)
+    {
+        var task = await GetSessionTaskAsync(session, token);
+        await output.WriteLineAsync($"Session: {session.Id.Value} ({session.Name}) [{session.Status}]");
+        await output.WriteLineAsync($"Selected: {(session.Id == current ? "yes" : "no")}");
+        await output.WriteLineAsync($"Created: {session.CreatedAt:O}, last active: {session.LastActiveAt:O}");
+        await output.WriteLineAsync(DescribeSessionTask(task));
+        if (session.Status == SessionStatus.Active && task is null)
+        {
+            await output.WriteLineAsync("[A standalone dialogue is in progress without a TaskId.]");
+        }
+    }
+
+    private async Task<TaskInfo?> GetSessionTaskAsync(SessionInfo session, CancellationToken token)
+    {
+        if (session.CurrentTaskId is { } id)
+        {
+            return await tasks.GetAsync(id, token)
+                ?? throw new InvalidOperationException("The session's current task does not exist.");
+        }
+        var page = await tasks.ListBySessionAsync(new ListSessionTasksRequest(session.Id, PageSize: 1), token);
+        return page.Items.SingleOrDefault();
+    }
+
+    private static string DescribeSessionTask(TaskInfo? task)
+    {
+        if (task is null)
+        {
+            return "Task: none (no tasks submitted)";
+        }
+        var finished = task.Status is TaskStatus.Completed or TaskStatus.Failed or TaskStatus.Cancelled;
+        return $"Task: {task.Id.Value} [{task.Status}] | Finished: {(finished ? "yes" : "no")}";
+    }
+
+    private sealed record PendingResult(SessionId SessionId, Task<TaskResult> Completion);
+    private sealed record SessionResult(SessionId SessionId, TaskResult Result);
 }

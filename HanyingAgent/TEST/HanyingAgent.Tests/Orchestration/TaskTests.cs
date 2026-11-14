@@ -553,6 +553,125 @@ public sealed class TaskTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Submit(session.Id, "closed"));
     }
 
+    [Fact]
+    public async Task Console_SessionCommandsCreateInspectListAndSelectWithoutCallingModel()
+    {
+        await using var fixture = await Fixture.Create(new ModelStub());
+        var existing = await fixture.NewSession();
+        using var input = new StringReader(
+            $"/new Work\n/session {existing.Id.Value}\n/session\n/sessions\n/use {existing.Id.Value}\n" +
+            $"/use missing\n/session\n/close\n/session\n/session {existing.Id.Value}\n/sessions\n/exit\n");
+        using var output = new StringWriter();
+        var console = ActivatorUtilities.CreateInstance<ConsoleApplication>(fixture.Host.Services, input, output);
+
+        await console.RunAsync(CancellationToken.None);
+
+        var work = Assert.Single(await fixture.Sessions.ListAsync(CancellationToken.None), session => session.Name == "Work");
+        var text = output.ToString();
+        Assert.Contains($"Session: {existing.Id.Value} (Test) [Idle]{Environment.NewLine}Selected: no", text);
+        Assert.Contains($"Session: {work.Id.Value} (Work) [Idle]{Environment.NewLine}Selected: yes", text);
+        Assert.Contains($"* {work.Id.Value} Work [Idle] | Task: none (no tasks submitted)", text);
+        Assert.Contains($"Session: {existing.Id.Value} (Test) [Idle]{Environment.NewLine}Selected: yes", text);
+        Assert.Contains($"Session: {existing.Id.Value} (Test) [Closed]{Environment.NewLine}Selected: no", text);
+        Assert.Contains("Created:", text);
+        Assert.Contains("last active:", text);
+        Assert.Equal(2, fixture.Logs.Entries.Count(entry => entry.EventId.Id == 4005));
+        Assert.Empty(fixture.Model.Invocations);
+        Assert.Equal(SessionStatus.Closed,
+            (await fixture.Sessions.GetAsync(existing.Id, CancellationToken.None))!.Status);
+    }
+
+    [Theory]
+    [InlineData(TaskStatus.Completed)]
+    [InlineData(TaskStatus.Failed)]
+    [InlineData(TaskStatus.Cancelled)]
+    public async Task Console_SessionQueriesShowLatestTaskAndDistinguishTerminalOutcomes(TaskStatus status)
+    {
+        var entered = Signal();
+        var model = new ModelStub(async (invocation, token) =>
+        {
+            if (Texts(invocation)[^1] == "older" || status == TaskStatus.Completed)
+            {
+                return Answer();
+            }
+            if (status == TaskStatus.Failed)
+            {
+                throw new HttpRequestException("offline");
+            }
+            entered.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            return Answer();
+        });
+        await using var fixture = await Fixture.Create(model);
+        var session = await fixture.NewSession();
+        var older = await fixture.Submit(session.Id, "older");
+        await fixture.Wait(older.Id);
+        var latest = await fixture.Submit(session.Id, "latest");
+        if (status == TaskStatus.Cancelled)
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await fixture.Tasks.CancelAsync(latest.Id, CancellationToken.None);
+        }
+        Assert.Equal(status, (await fixture.Wait(latest.Id)).Status);
+        using var input = new StringReader($"/session {session.Id.Value}\n/sessions\n/use {session.Id.Value}\n/exit\n");
+        using var output = new StringWriter();
+        var console = ActivatorUtilities.CreateInstance<ConsoleApplication>(fixture.Host.Services, input, output);
+
+        await console.RunAsync(CancellationToken.None);
+
+        var text = output.ToString();
+        Assert.Contains($"Session: {session.Id.Value} (Test) [Idle]", text);
+        Assert.Contains($"Task: {latest.Id.Value} [{status}] | Finished: yes", text);
+        Assert.DoesNotContain($"Task: {older.Id.Value}", text);
+        Assert.Equal(2, model.Invocations.Count);
+    }
+
+    [Theory]
+    [InlineData(false, TaskStatus.WaitingForModel)]
+    [InlineData(true, TaskStatus.Cancelling)]
+    public async Task Console_SessionQueriesShowActiveTaskAsUnfinishedAndRejectClose(
+        bool cancel, TaskStatus expected)
+    {
+        var entered = Signal();
+        var release = Signal();
+        await using var fixture = await Fixture.Create(new ModelStub(async (_, _) =>
+        {
+            entered.TrySetResult();
+            await release.Task;
+            return Answer();
+        }));
+        var session = await fixture.NewSession();
+        var task = await fixture.Submit(session.Id, "question");
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            if (cancel)
+            {
+                await fixture.Tasks.CancelAsync(task.Id, CancellationToken.None);
+            }
+            using var input = new StringReader(
+                $"/use {session.Id.Value}\n/session\n/sessions\n/close\n/session\n/exit\n");
+            using var output = new StringWriter();
+            var console = ActivatorUtilities.CreateInstance<ConsoleApplication>(fixture.Host.Services, input, output);
+
+            await console.RunAsync(CancellationToken.None);
+
+            var text = output.ToString();
+            Assert.Contains($"Session: {session.Id.Value} (Test) [Active]", text);
+            Assert.Contains($"Task: {task.Id.Value} [{expected}] | Finished: no", text);
+            Assert.Contains($"* {session.Id.Value} Test [Active]", text);
+            Assert.DoesNotContain("Session closed", text);
+            Assert.Single(fixture.Logs.Entries, entry => entry.EventId.Id == 4005);
+            Assert.Equal(task.Id, (await fixture.Sessions.GetAsync(session.Id, CancellationToken.None))!.CurrentTaskId);
+        }
+        finally
+        {
+            release.TrySetResult();
+        }
+        await fixture.Wait(task.Id);
+        await fixture.AssertIdle(session.Id);
+    }
+
     private static TaskCompletionSource Signal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
     private static ModelResponse Answer() => new("answer", [], ModelFinishReason.Stop);
     private static string[] Texts(ModelInvocation invocation) => invocation.Messages.Select(message => message switch

@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Channels;
 using HanyingAgent.Contracts.Context.Operations.Requests;
 using HanyingAgent.Contracts.Execution.Models;
 using HanyingAgent.Contracts.LanguageModels.Models;
@@ -47,12 +48,8 @@ public sealed class HostExecutionTests
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Could not start Console process.");
         try
         {
-            var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
             var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
             await process.StandardInput.WriteLineAsync(question);
-            await process.StandardInput.WriteLineAsync("/wait");
-            await process.StandardInput.WriteLineAsync("/exit");
-            process.StandardInput.Close();
 
             var context = await listener.GetContextAsync().WaitAsync(timeout.Token);
             using var reader = new StreamReader(context.Request.InputStream, Encoding.UTF8);
@@ -68,11 +65,21 @@ public sealed class HostExecutionTests
             await context.Response.OutputStream.WriteAsync(bytes, timeout.Token);
             context.Response.Close();
 
+            var stdout = new StringBuilder();
+            while (!stdout.ToString().Contains($"Assistant> {answer}"))
+            {
+                var line = await process.StandardOutput.ReadLineAsync(timeout.Token)
+                    ?? throw new InvalidOperationException("Console exited before showing the reply.");
+                stdout.AppendLine(line);
+            }
+            await process.StandardInput.WriteLineAsync("/exit");
+            process.StandardInput.Close();
+            stdout.Append(await process.StandardOutput.ReadToEndAsync(timeout.Token));
             await process.WaitForExitAsync(timeout.Token);
             Assert.Equal(0, process.ExitCode);
             using var json = JsonDocument.Parse(body);
             Assert.Equal(question, json.RootElement.GetProperty("messages")[1].GetProperty("content").GetString());
-            Assert.Contains($"Assistant> {answer}", await stdout);
+            Assert.Contains($"Assistant> {answer}", stdout.ToString());
             Assert.DoesNotContain(question, await stderr);
         }
         finally
@@ -341,6 +348,180 @@ public sealed class HostExecutionTests
     }
 
     [Fact]
+    public async Task Console_DisplaysCompletedReplyWithoutCommandsAndKeepsOneInputReadInFlight()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = new RecordingHandler(async (_, token) =>
+        {
+            entered.TrySetResult();
+            await release.Task.WaitAsync(token);
+            return Response();
+        });
+        using var input = new ScriptedReader();
+        var output = new NotificationWriter();
+        using var host = CreateHost(handler, new RecordingLoggerProvider(), input, output);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await host.StartAsync(cancellation.Token);
+        input.Send("question");
+        var run = host.Services.GetRequiredService<ConsoleApplication>().RunAsync(cancellation.Token);
+        try
+        {
+            await entered.Task.WaitAsync(cancellation.Token);
+            await input.WaitForReadAsync(2, cancellation.Token);
+            release.TrySetResult();
+            await output.WaitForAsync(text => text.Contains("Assistant> private-answer"), cancellation.Token);
+            await output.WaitForAsync(text => text == "You> ", cancellation.Token);
+            Assert.Equal(2, input.ReadCount);
+
+            input.Send("/wait");
+            input.Send("/exit");
+            await run.WaitAsync(cancellation.Token);
+
+            Assert.Single(handler.Requests);
+            Assert.Equal(1, output.Transcript.Split("Assistant> private-answer").Length - 1);
+            Assert.DoesNotContain("Request failed", output.Transcript);
+        }
+        finally
+        {
+            cancellation.Cancel();
+            input.Send(null);
+            release.TrySetResult();
+            await run;
+            await host.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Console_LabelsOtherSessionCompletionAndShowsUnreadReplyWhenSwitchingBack()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = new RecordingHandler(async (_, token) =>
+        {
+            entered.TrySetResult();
+            await release.Task.WaitAsync(token);
+            return Response("first-session-answer");
+        });
+        using var input = new ScriptedReader();
+        var output = new NotificationWriter();
+        using var host = CreateHost(handler, new RecordingLoggerProvider(), input, output);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await host.StartAsync(cancellation.Token);
+        var run = host.Services.GetRequiredService<ConsoleApplication>().RunAsync(cancellation.Token);
+        try
+        {
+            var initial = await output.WaitForAsync(text => text.StartsWith("Session: "), cancellation.Token);
+            var firstId = initial.Split(' ')[1];
+            input.Send("question");
+            await entered.Task.WaitAsync(cancellation.Token);
+            input.Send("/new Other");
+            await output.WaitForAsync(text => text.Contains("(Other)"), cancellation.Token);
+            await input.WaitForReadAsync(3, cancellation.Token);
+            release.TrySetResult();
+
+            await output.WaitForAsync(text => text.Contains($"[Session: {firstId}, Task:") &&
+                text.Contains("[Completed]"), cancellation.Token);
+            Assert.DoesNotContain("Assistant>", output.Transcript);
+            input.Send($"/use {firstId}");
+            await output.WaitForAsync(text => text.Contains("Assistant> first-session-answer"), cancellation.Token);
+            input.Send("/exit");
+            await run.WaitAsync(cancellation.Token);
+
+            Assert.Single(handler.Requests);
+            Assert.Equal(1, output.Transcript.Split("Assistant> first-session-answer").Length - 1);
+        }
+        finally
+        {
+            cancellation.Cancel();
+            input.Send(null);
+            release.TrySetResult();
+            await run;
+            await host.StopAsync();
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Console_AutomaticallyDisplaysFailureAndPartialOutput(bool partial)
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = new RecordingHandler(async (_, token) =>
+        {
+            entered.TrySetResult();
+            await release.Task.WaitAsync(token);
+            return partial ? Response("partial", "length") : new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+        });
+        using var input = new ScriptedReader();
+        var output = new NotificationWriter();
+        using var host = CreateHost(handler, new RecordingLoggerProvider(), input, output);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await host.StartAsync(cancellation.Token);
+        input.Send("question");
+        var run = host.Services.GetRequiredService<ConsoleApplication>().RunAsync(cancellation.Token);
+        try
+        {
+            await entered.Task.WaitAsync(cancellation.Token);
+            await input.WaitForReadAsync(2, cancellation.Token);
+            release.TrySetResult();
+            await output.WaitForAsync(text => text.Contains("[Failed]"), cancellation.Token);
+            await output.WaitForAsync(text => text.Contains(partial ? "Output truncated" : "Request failed"),
+                cancellation.Token);
+            await output.WaitForAsync(text => text == "You> ", cancellation.Token);
+            Assert.Equal(partial, output.Transcript.Contains("Assistant> partial"));
+            input.Send("/exit");
+            await run.WaitAsync(cancellation.Token);
+            Assert.Single(handler.Requests);
+        }
+        finally
+        {
+            cancellation.Cancel();
+            input.Send(null);
+            release.TrySetResult();
+            await run;
+            await host.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Console_AutomaticallyConfirmsCancellationWithoutWaitCommand()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = new RecordingHandler(async (_, token) =>
+        {
+            entered.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            return Response();
+        });
+        using var input = new ScriptedReader();
+        var output = new NotificationWriter();
+        using var host = CreateHost(handler, new RecordingLoggerProvider(), input, output);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await host.StartAsync(cancellation.Token);
+        input.Send("question");
+        var run = host.Services.GetRequiredService<ConsoleApplication>().RunAsync(cancellation.Token);
+        try
+        {
+            await entered.Task.WaitAsync(cancellation.Token);
+            input.Send("/cancel");
+            await output.WaitForAsync(text => text.Contains("[Cancelled]"), cancellation.Token);
+            await output.WaitForAsync(text => text.Contains("Task cancelled after execution stopped"), cancellation.Token);
+            input.Send("/exit");
+            await run.WaitAsync(cancellation.Token);
+            Assert.DoesNotContain("Assistant>", output.Transcript);
+        }
+        finally
+        {
+            cancellation.Cancel();
+            input.Send(null);
+            await run;
+            await host.StopAsync();
+        }
+    }
+
+    [Fact]
     public async Task Execution_PreCancellationDoesNotInvokeModel()
     {
         var handler = new RecordingHandler();
@@ -428,6 +609,76 @@ public sealed class HostExecutionTests
                 Release.Dispose();
             }
             base.Dispose(disposing);
+        }
+    }
+
+    private sealed class ScriptedReader : TextReader
+    {
+        private readonly Channel<InputLine> _lines = Channel.CreateUnbounded<InputLine>();
+        private readonly Channel<int> _reads = Channel.CreateUnbounded<int>();
+        private int _readCount;
+        public int ReadCount => Volatile.Read(ref _readCount);
+
+        public void Send(string? text) => _lines.Writer.TryWrite(new InputLine(text));
+
+        public override string? ReadLine()
+        {
+            _reads.Writer.TryWrite(Interlocked.Increment(ref _readCount));
+            return _lines.Reader.ReadAsync().AsTask().GetAwaiter().GetResult().Text;
+        }
+
+        public async Task WaitForReadAsync(int count, CancellationToken token)
+        {
+            while (await _reads.Reader.ReadAsync(token) < count)
+            {
+            }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                Send(null);
+            }
+            base.Dispose(disposing);
+        }
+
+        private sealed record InputLine(string? Text);
+    }
+
+    private sealed class NotificationWriter : TextWriter
+    {
+        private readonly ConcurrentQueue<string> _transcript = new();
+        private readonly Channel<string> _writes = Channel.CreateUnbounded<string>();
+        public override Encoding Encoding => Encoding.UTF8;
+        public string Transcript => string.Concat(_transcript);
+
+        public override Task WriteAsync(string? value)
+        {
+            _transcript.Enqueue(value ?? "");
+            _writes.Writer.TryWrite(value ?? "");
+            return Task.CompletedTask;
+        }
+
+        public override Task WriteLineAsync(string? value)
+        {
+            _transcript.Enqueue((value ?? "") + Environment.NewLine);
+            _writes.Writer.TryWrite(value ?? "");
+            return Task.CompletedTask;
+        }
+
+        public override Task WriteLineAsync() => WriteLineAsync("");
+
+        public async Task<string> WaitForAsync(Func<string, bool> predicate, CancellationToken token)
+        {
+            while (true)
+            {
+                var text = await _writes.Reader.ReadAsync(token);
+                if (predicate(text))
+                {
+                    return text;
+                }
+            }
         }
     }
 }
