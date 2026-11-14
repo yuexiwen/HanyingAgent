@@ -23,6 +23,7 @@ public static class LogEvents
     public static readonly EventId DialogueCancelled = new(4004, nameof(DialogueCancelled));
     public static readonly EventId SessionCommandFailed = new(4005, nameof(SessionCommandFailed));
     public static readonly EventId DialogueResponseNotRecorded = new(4006, nameof(DialogueResponseNotRecorded));
+    public static readonly EventId ConsoleTaskNotificationFailed = new(4007, nameof(ConsoleTaskNotificationFailed));
     public static readonly EventId TaskAccepted = new(5001, nameof(TaskAccepted));
     public static readonly EventId TaskStateChanged = new(5002, nameof(TaskStateChanged));
     public static readonly EventId TaskCancellationRequested = new(5003, nameof(TaskCancellationRequested));
