@@ -10,10 +10,10 @@ Memory、Tools、LanguageModels 和 Conversation 的主要契约；已实现内�
 Ollama 模型适配器，以及 Generic Host / DI、关联日志和 DirectExecutor 驱动的 Console。
 当前已实现可信本地单用户、内存 Session / Conversation 和有界多轮历史窗口；
 最小 Direct 任务编排已实现：后台运行、状态与结果查询、取消和 Session 原子占用；
-工具循环、等待用户与恢复流程仍待实现。具体当前范围见 [Orchestration](../HanyingAgent/SRC/Runtime/Orchestration/Orchestration.md)。
+工具循环、等待用户与恢复流程仍待实现。具体当前范围见 [Orchestration](../../HanyingAgent/SRC/Runtime/Orchestration/Orchestration.md)。
 
 逻辑模块不等于独立进程或项目，Contracts 中的数据类型也不等于保存数据或执行业务的实现。
-项目入口见 [HanyingAgent](../HanyingAgent/HanyingAgent.md)。
+项目入口见 [HanyingAgent](../../HanyingAgent/HanyingAgent.md)。
 
 ## 2. 总体划分
 
@@ -34,25 +34,25 @@ Runtime：会话与任务协调、历史、执行流程、Context、执行状态
 
 | 模块 | 核心职责 | 不负责 |
 |---|---|---|
-| [User](../HanyingAgent/SRC/Contracts/Users/Users.md) | 管理用户标识、显示名称和资料时间。 | 不管理所有用户关联数据，不等于认证或授权服务。 |
-| [Session](../HanyingAgent/SRC/Contracts/Sessions/Sessions.md) | 管理会话身份、所属 UserId、生命周期和当前任务关联。 | 不保存完整历史，不负责界面，不携带执行句柄。 |
-| [Task](../HanyingAgent/SRC/Contracts/Tasks/Tasks.md) | 定义一次工作的公共快照、结果和提交、查询、补充、取消协议。 | 不把每条消息都当作新任务，不独立维护另一套矛盾的执行状态。 |
-| [Conversation](../HanyingAgent/SRC/Runtime/Conversation/Conversation.md) | 管理真实交互的追加、确定顺序、归属和历史读取。 | 不渲染界面，不选择全部模型输入，不决定数据库技术。 |
-| [Memory](../HanyingAgent/SRC/Capabilities/Memory/Memory.md) | 管理可复用语义信息的写入、修正、读取、检索、失效和遗忘。 | 不等于全部聊天历史，不管理当前执行步骤。 |
-| [Skills](../HanyingAgent/SRC/Capabilities/Skills/Skills.md) | 提供任务方法、SOP、参考资料和选择线索。 | 不代替工具实现，也不直接推进任务控制流。 |
-| [Context](../HanyingAgent/SRC/Runtime/Context/Context.md) | 为本轮模型调用选择、排序、压缩并组装消息和工具定义。 | 不管理来源数据的生命周期，不默认发送全部历史。 |
-| [Orchestration](../HanyingAgent/SRC/Runtime/Orchestration/Orchestration.md) | 协调任务接受、会话占用、执行启动、等待、恢复、取消和收尾。 | 不实现每种任务内部策略或 Provider 协议。 |
-| [Execution / Executor](../HanyingAgent/SRC/Runtime/Execution/Execution.md) | 按 Direct、Chain、ReAct 等策略推进任务内部步骤。 | 不直接实现模型 SDK、工具传输或数据库访问。 |
-| [State](../HanyingAgent/SRC/Runtime/State/State.md) | 管理执行位置、步骤、迭代、待处理动作、状态转换和恢复进度。 | 不代替语义记忆，也不与 TaskInfo 各自维护矛盾事实。 |
-| [LanguageModels](../HanyingAgent/SRC/Contracts/LanguageModels/LanguageModels.md) | 统一一次模型调用的消息、参数、文本、工具调用、结束原因和用量。 | 不执行工具，不召回记忆，不决定整个 Task 是否完成。 |
-| [Tools](../HanyingAgent/SRC/Capabilities/Tools/Tools.md) | 校验并执行实际动作，统一工具定义、执行约束和 Observation。 | 不决定整个 Agent 的执行策略，不信任模型自行授予的权限。 |
-| [Host](../HanyingAgent/SRC/Host/Host.md) | 接收输入、解析显式命令、选择会话、展示历史和结果。 | 不构造模型 Context，不推进 ReAct，不实现检索算法。 |
-| [Persistence](../HanyingAgent/SRC/Infrastructure/Persistence/Persistence.md) | 实现用户、会话、任务、历史、记忆、状态、Checkpoint 和 Artifact 的具体存储。 | 不决定业务含义、任务策略或访问政策。 |
-| [Observability](../HanyingAgent/SRC/Infrastructure/Observability/Observability.md) | 通过日志、事件、指标和追踪解释执行过程。 | 不成为任务状态或业务记录的另一套权威存储。 |
+| [User](../../HanyingAgent/SRC/Contracts/Users/Users.md) | 管理用户标识、显示名称和资料时间。 | 不管理所有用户关联数据，不等于认证或授权服务。 |
+| [Session](../../HanyingAgent/SRC/Contracts/Sessions/Sessions.md) | 管理会话身份、所属 UserId、生命周期和当前任务关联。 | 不保存完整历史，不负责界面，不携带执行句柄。 |
+| [Task](../../HanyingAgent/SRC/Contracts/Tasks/Tasks.md) | 定义一次工作的公共快照、结果和提交、查询、补充、取消协议。 | 不把每条消息都当作新任务，不独立维护另一套矛盾的执行状态。 |
+| [Conversation](../../HanyingAgent/SRC/Runtime/Conversation/Conversation.md) | 管理真实交互的追加、确定顺序、归属和历史读取。 | 不渲染界面，不选择全部模型输入，不决定数据库技术。 |
+| [Memory](../../HanyingAgent/SRC/Capabilities/Memory/Memory.md) | 管理可复用语义信息的写入、修正、读取、检索、失效和遗忘。 | 不等于全部聊天历史，不管理当前执行步骤。 |
+| [Skills](../../HanyingAgent/SRC/Capabilities/Skills/Skills.md) | 提供任务方法、SOP、参考资料和选择线索。 | 不代替工具实现，也不直接推进任务控制流。 |
+| [Context](../../HanyingAgent/SRC/Runtime/Context/Context.md) | 为本轮模型调用选择、排序、压缩并组装消息和工具定义。 | 不管理来源数据的生命周期，不默认发送全部历史。 |
+| [Orchestration](../../HanyingAgent/SRC/Runtime/Orchestration/Orchestration.md) | 协调任务接受、会话占用、执行启动、等待、恢复、取消和收尾。 | 不实现每种任务内部策略或 Provider 协议。 |
+| [Execution / Executor](../../HanyingAgent/SRC/Runtime/Execution/Execution.md) | 按 Direct、Chain、ReAct 等策略推进任务内部步骤。 | 不直接实现模型 SDK、工具传输或数据库访问。 |
+| [State](../../HanyingAgent/SRC/Runtime/State/State.md) | 管理执行位置、步骤、迭代、待处理动作、状态转换和恢复进度。 | 不代替语义记忆，也不与 TaskInfo 各自维护矛盾事实。 |
+| [LanguageModels](../../HanyingAgent/SRC/Contracts/LanguageModels/LanguageModels.md) | 统一一次模型调用的消息、参数、文本、工具调用、结束原因和用量。 | 不执行工具，不召回记忆，不决定整个 Task 是否完成。 |
+| [Tools](../../HanyingAgent/SRC/Capabilities/Tools/Tools.md) | 校验并执行实际动作，统一工具定义、执行约束和 Observation。 | 不决定整个 Agent 的执行策略，不信任模型自行授予的权限。 |
+| [Host](../../HanyingAgent/SRC/Host/Host.md) | 接收输入、解析显式命令、选择会话、展示历史和结果。 | 不构造模型 Context，不推进 ReAct，不实现检索算法。 |
+| [Persistence](../../HanyingAgent/SRC/Infrastructure/Persistence/Persistence.md) | 实现用户、会话、任务、历史、记忆、状态、Checkpoint 和 Artifact 的具体存储。 | 不决定业务含义、任务策略或访问政策。 |
+| [Observability](../../HanyingAgent/SRC/Infrastructure/Observability/Observability.md) | 通过日志、事件、指标和追踪解释执行过程。 | 不成为任务状态或业务记录的另一套权威存储。 |
 
 ### 2.2 Contracts 的职责
 
-[Contracts](../HanyingAgent/SRC/Contracts/Contracts.md) 是模块之间的协议层，不是另一个执行引擎。
+[Contracts](../../HanyingAgent/SRC/Contracts/Contracts.md) 是模块之间的协议层，不是另一个执行引擎。
 
 - 定义接口、ID、消息、请求、响应与必要的约定。
 - DTO 表达数据，接口表达能力，不自动完成业务规则、存储或远程调用。
@@ -132,7 +132,7 @@ Assistant 来自模型时保留结束原因，截断、过滤或拒绝即使没�
 
 读取首次默认最近 20 条，页内 Sequence 升序，游标继续读取更早历史。
 Context 不直接把分页结果发送给模型：需要选择和转换内容，并补齐工具关联或舍弃整个相关片段。
-接口与具体约定见 [Conversation 契约](../HanyingAgent/SRC/Contracts/Conversation/Conversation.md)。
+接口与具体约定见 [Conversation 契约](../../HanyingAgent/SRC/Contracts/Conversation/Conversation.md)。
 
 ## 4. 完整运行流程
 
@@ -397,4 +397,4 @@ Host 管交互，Persistence 管保存，Observability 管观察，Contracts 管
 
 - [Mini Agent Runtime 设计初稿](<./Mini Agent Runtime 设计初稿.md>)：完整背景、分层及后续组件草图。
 - [本地模块与远程 Service 演进设计](<./Agent Runtime 本地模块与远程 Service 演进设计.md>)：适配器和远程边界。
-- [Contracts 导航](../HanyingAgent/SRC/Contracts/Contracts.md)：当前公共契约入口。
+- [Contracts 导航](../../HanyingAgent/SRC/Contracts/Contracts.md)：当前公共契约入口。

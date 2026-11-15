@@ -135,6 +135,6 @@ Agent 配置包括 SystemInstruction、MaxInputCharacters、MaxOutputTokens、Te
 - bin、obj 是生成目录，不编写模块文档，也不作为业务模块维护。
 - 目录分组不等于微服务划分；业务模块通过契约协作，具体实现由入口组合。
 
-整体设计背景见[设计初稿](<../.docs/Mini Agent Runtime 设计初稿.md>)。
-模块边界与端到端执行过程见[模块职责与运行流程](<../.docs/HanyingAgent 模块职责与运行流程.md>)。
-工作记忆的本期范围、验收标准和扩展方向见[WorkingMemory 最小实现与演进计划](<../.docs/WorkingMemory 最小实现与演进计划.md>)。
+整体设计背景见[设计初稿](<../.docs/disign/Mini Agent Runtime 设计初稿.md>)。
+模块边界与端到端执行过程见[模块职责与运行流程](<../.docs/disign/HanyingAgent 模块职责与运行流程.md>)。
+工作记忆的本期范围、验收标准和扩展方向见[WorkingMemory 最小实现与演进计划](<../.docs/disign/WorkingMemory 最小实现与演进计划.md>)。

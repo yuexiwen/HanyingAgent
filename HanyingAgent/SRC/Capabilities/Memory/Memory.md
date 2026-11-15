@@ -6,7 +6,7 @@
 
 当前已定义内部存储端口并实现工作记忆 Manager，没有子目录，长期记忆 Manager 与 Retriever 尚未实现。
 具体内存 Store 已在 [Infrastructure/Persistence](../../Infrastructure/Persistence/Persistence.md) 实现并配套独立测试。
-第一版仅实现工作记忆，范围、验收与后续能力见 [WorkingMemory 最小实现与演进计划](<../../../../.docs/WorkingMemory 最小实现与演进计划.md>)；
+第一版仅实现工作记忆，范围、验收与后续能力见 [WorkingMemory 最小实现与演进计划](<../../../../.docs/disign/WorkingMemory 最小实现与演进计划.md>)；
 当前已完成五步：规则与测试基础、内存 Store、工作记忆 Manager、真实组合边界与并发测试、统一验收。
 内存版 WorkingMemory MVP 已验收，相关正式测试共 252 项通过；未接入 Agent 入口。
 

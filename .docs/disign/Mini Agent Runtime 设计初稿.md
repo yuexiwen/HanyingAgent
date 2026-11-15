@@ -112,6 +112,9 @@ HanyingAgent 仍是项目根目录；模块目录放入其 SRC 子目录，TEST 
 ```text
 Hanying
 ├── .docs
+│   ├── workmile
+│   ├── disign
+│   └── discussion
 └── HanyingAgent
     ├── HanyingAgent.csproj
     ├── Program.cs
