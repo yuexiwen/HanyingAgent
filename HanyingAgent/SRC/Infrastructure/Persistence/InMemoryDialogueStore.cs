@@ -19,6 +19,7 @@ public sealed partial class InMemoryDialogueStore : IUserStore, ISessionStore, I
     private readonly Dictionary<SessionId, SessionInfo> _sessions = new();
     private readonly Dictionary<MessageId, ConversationMessage> _messages = new();
     private readonly Dictionary<SessionId, List<ConversationMessage>> _history = new();
+    private readonly HashSet<SessionId> _hiddenSessions = new();
 
     public UserInfo Add(string displayName, DateTimeOffset now, CancellationToken cancellationToken)
     {
@@ -93,7 +94,7 @@ public sealed partial class InMemoryDialogueStore : IUserStore, ISessionStore, I
         lock (_gate)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return _sessions.Values.Where(session => session.UserId == owner)
+            return _sessions.Values.Where(session => session.UserId == owner && !_hiddenSessions.Contains(session.Id))
                 .OrderBy(session => session.CreatedAt).ThenBy(session => session.Id.Value, StringComparer.Ordinal).ToArray();
         }
     }
@@ -108,6 +109,7 @@ public sealed partial class InMemoryDialogueStore : IUserStore, ISessionStore, I
             {
                 throw new InvalidOperationException("Cannot close a session with an active execution.");
             }
+
             if (session.Status == SessionStatus.Closed)
             {
                 return session;
@@ -119,6 +121,16 @@ public sealed partial class InMemoryDialogueStore : IUserStore, ISessionStore, I
             };
             _sessions[id] = closed;
             return closed;
+        }
+    }
+
+    public void Hide(SessionId id, UserId owner, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            RequireSession(id, owner);
+            _hiddenSessions.Add(id);
         }
     }
 

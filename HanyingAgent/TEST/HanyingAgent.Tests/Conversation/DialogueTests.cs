@@ -379,7 +379,7 @@ public sealed class DialogueTests
         await fixture.Respond(previous.Id, "prior");
         using var output = new StringWriter();
         using var input = new StringReader(
-            $"/use {previous.Id.Value}\nfollow-up\n/wait\n/history\n/new Other\n/history\nfresh\n/wait\n/sessions\n/close\n" +
+            $"/use {previous.Id.Value}\nfollow-up\n/wait\n/history all\n/new Other\n/history\nfresh\n/wait\n/sessions\n/close\n" +
             $"cannot-send\n/use {previous.Id.Value}\nback\n/wait\n/unknown\n/exit\n");
         var console = ActivatorUtilities.CreateInstance<ConsoleApplication>(fixture.Host.Services, input, output);
 
@@ -397,6 +397,73 @@ public sealed class DialogueTests
         Assert.Contains("No messages in this session.", output.ToString());
         Assert.Contains("Request failed", output.ToString());
         Assert.DoesNotContain(model.Invocations, invocation => Texts(invocation).Contains("cannot-send"));
+    }
+
+    [Theory]
+    [InlineData("/history", 1)]
+    [InlineData("/history 10", 10)]
+    [InlineData("/history 500", 105)]
+    [InlineData("/history all", 105)]
+    public async Task Console_HistoryCountsTurnsAcrossPagesAndIncludesUnansweredInput(string command, int expectedTurns)
+    {
+        using var fixture = new Fixture(new ModelStub());
+        var session = await fixture.NewSession();
+        for (var index = 0; index < 104; index++)
+        {
+            await fixture.Append(session.Id, new UserConversationContent($"question-{index}"));
+            await fixture.Append(session.Id, Assistant($"reply-{index}"));
+        }
+        await fixture.Append(session.Id, new UserConversationContent("unanswered"));
+        using var input = new StringReader($"/use {session.Id.Value}\n{command}\n/exit\n");
+        using var output = new StringWriter();
+        var console = ActivatorUtilities.CreateInstance<ConsoleApplication>(fixture.Host.Services, input, output);
+
+        await console.RunAsync(CancellationToken.None);
+
+        var text = output.ToString();
+        Assert.Equal(expectedTurns, text.Split(" User: ").Length - 1);
+        Assert.Equal(expectedTurns - 1, text.Split(" Assistant [Stop]: ").Length - 1);
+        Assert.Contains("209 User: unanswered", text);
+        Assert.Contains("[No assistant response recorded for this turn.]", text);
+        if (expectedTurns > 1)
+        {
+            var oldest = 105 - expectedTurns;
+            Assert.Contains($"User: question-{oldest}{Environment.NewLine}", text);
+            Assert.True(text.IndexOf($"User: question-{oldest}{Environment.NewLine}", StringComparison.Ordinal) <
+                text.IndexOf("User: unanswered", StringComparison.Ordinal));
+        }
+        Assert.DoesNotContain("Older messages:", text);
+    }
+
+    [Fact]
+    public async Task Console_IndicesRepackAfterHidingAndHiddenHistoryRemainsAccessibleById()
+    {
+        using var fixture = new Fixture(new ModelStub());
+        var first = await fixture.NewSession("First");
+        var second = await fixture.NewSession("Second");
+        await fixture.Append(first.Id, new UserConversationContent("retained"));
+        var visible = await fixture.Sessions.ListAsync(CancellationToken.None);
+        var firstIndex = visible.ToList().FindIndex(session => session.Id == first.Id) + 1;
+        using var input = new StringReader(
+            $"/sessions\n/use {firstIndex}\n/delete {firstIndex}\n/history\n/sessions\n/use 1\n/session\n/sessions\n" +
+            $"/use {first.Id.Value}\n/history all\n/delete 0\n/use 999\n/history 0\n/history bad\n/exit\n");
+        using var output = new StringWriter();
+        var console = ActivatorUtilities.CreateInstance<ConsoleApplication>(fixture.Host.Services, input, output);
+
+        await console.RunAsync(CancellationToken.None);
+
+        var remaining = await fixture.Sessions.ListAsync(CancellationToken.None);
+        Assert.DoesNotContain(remaining, session => session.Id == first.Id);
+        Assert.Contains(remaining, session => session.Id == second.Id);
+        Assert.NotNull(await fixture.Sessions.GetAsync(first.Id, CancellationToken.None));
+        Assert.Single((await fixture.Read(first.Id)).Items);
+        var text = output.ToString();
+        var afterHide = text[(text.IndexOf("Session hidden:", StringComparison.Ordinal))..];
+        var selected = remaining[0];
+        Assert.Contains($"1 * {selected.Id.Value}", text);
+        Assert.Contains($"Session: {selected.Id.Value} ({selected.Name})", afterHide);
+        Assert.Contains("User: retained", afterHide);
+        Assert.Equal(5, fixture.Logs.Entries.Count(entry => entry.EventId.Id == 4005));
     }
 
     private static AssistantConversationContent Assistant(string text) => new(text, [], ModelFinishReason.Stop);

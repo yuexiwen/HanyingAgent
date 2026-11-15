@@ -20,6 +20,12 @@ public interface ISessionManager
         CancellationToken cancellationToken);
 
     /// <summary>
+    /// Hides a session from lists without deleting data or stopping its task.
+    /// The session remains accessible by its ID.
+    /// </summary>
+    Task HideAsync(SessionId sessionId, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Closes an idle session, returns an already closed session unchanged,
     /// and rejects a session that still has an unfinished task.
     /// </summary>

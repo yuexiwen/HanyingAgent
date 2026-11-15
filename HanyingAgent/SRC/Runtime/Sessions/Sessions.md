@@ -17,7 +17,10 @@ Closed 会话允许读取历史、重复关闭，拒绝新输入；关闭不删�
 直接追加历史属于可信进程内 API，不用于替代 DialogueCoordinator 发起执行。
 
 Console 通过 `/new NAME` 创建并选择、`/session [ID]` 查询详情、`/sessions` 列表、
-`/use ID` 选择会话。当前选择仅保存在 Host；查询指定 ID 不会改变选择。
+`/use INDEX|ID` 选择会话。列表编号从 1 连续排列，隐藏后重排，不作为 SessionId 保存。
+`/delete INDEX` 调用 HideAsync，仅从可见列表隐藏；当前选择被隐藏时取消选择。
+隐藏由 Store 校验归属并记录，保留会话、历史、任务与执行；重复隐藏幂等，完整 ID 仍可访问。
+隐藏不是 Close，不阻止运行任务正常完成。当前选择仅保存在 Host；查询指定 ID 不会改变选择。
 任务摘要由 Host 使用任务查询协议组合，不把任务集合放进 SessionInfo。
 详情和列表显示当前或最近任务，以及是否进入 Completed / Failed / Cancelled 终态；
 Idle 不等于成功，Cancelling 不等于已经结束，没有任务也不会标成任务完成。

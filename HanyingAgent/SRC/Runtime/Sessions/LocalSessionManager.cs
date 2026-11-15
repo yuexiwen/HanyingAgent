@@ -31,6 +31,12 @@ public sealed class LocalSessionManager(
     public async Task<IReadOnlyList<SessionInfo>> ListAsync(CancellationToken cancellationToken) =>
         store.List(await identity.GetUserIdAsync(cancellationToken), cancellationToken);
 
+    public async Task HideAsync(SessionId sessionId, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionId.Value);
+        store.Hide(sessionId, await identity.GetUserIdAsync(cancellationToken), cancellationToken);
+    }
+
     public async Task<SessionInfo> CloseAsync(SessionId sessionId, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId.Value);

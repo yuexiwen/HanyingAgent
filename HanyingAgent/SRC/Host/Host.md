@@ -8,6 +8,15 @@
 
 ## 当前实现
 
+- Console 交互按职责拆分，命令与输出行为不变：
+  - [ConsoleApplication](./ConsoleApplication.cs)：初始化、等待输入或结果、通知分派、错误与退出收尾。
+  - [ConsoleCommandHandler](./Console/ConsoleCommandHandler.cs)：解析参数、查询和发起操作，不直接修改业务状态。
+  - [ConsoleRenderer](./Console/ConsoleRenderer.cs)：接收快照并输出，不查询 Store 或操作管理器。
+  - [ConsoleState](./Console/ConsoleState.cs)：当前选择、最近任务、待展示、未读与已展示标记。
+  三个 Console 专属组件位于 [Console](./Console/Console.md)，在每次 RunAsync 中创建并共享；
+  不注册为全局共享状态，仍通过入口注入的 TextReader / TextWriter 使用同一输入输出通道。
+  [ConversationHistoryReader](../Runtime/Conversation/ConversationHistoryReader.cs) 由 DI 注册，
+  在 Conversation 模块读取最近 N 轮或全部记录，与模型 Context 窗口及终端渲染分离。
 - [ApplicationHost](./ApplicationHost.cs) 统一注册配置、日志、记忆、Context、类型化 HTTP 模型客户端和执行器。
 - [ConsoleApplication](./ConsoleApplication.cs) 提交任务后立即显示 TaskId，并异步等待该任务的结果。
   当前会话完成时自动展示回答、失败或取消；其他会话完成时显示带 SessionId / TaskId 的通知，
@@ -22,13 +31,19 @@
 - 启动时创建可信本地用户和 Default 会话；Host 只保存当前 SessionId，历史由 Conversation 管理，
   历史选择由 ConversationWindow 完成，不自动选择 MemoryOwner；正常输入通过 LocalTaskManager 创建正式 Task。
 - `/new NAME` 创建并选择会话，`/session [ID]` 查询指定或当前会话详情，不改变选择；
-  `/sessions` 列出可见会话并用 `*` 标记当前选择，`/use ID` 切换（完整 ID）并显示详情。
+  `/sessions` 从 1 连续编号并用 `*` 标记当前选择，`/use INDEX|ID` 切换并显示详情。
+  编号按当前可见列表解析，不是永久 ID；`/delete INDEX` 隐藏后立即列出重排编号。
+  隐藏不删除历史与任务，也不取消运行；隐藏当前会话取消选择。
+  隐藏会话可通过完整 ID 访问，选择不会自动恢复可见性。
   详情包含是否选中、创建及活动时间；详情和列表均显示当前任务（若有），否则显示最近提交的任务。
   从未提交任务的会话明确显示 Task: none，不把它当作已完成任务。
   Finished: yes 表示任务处于 Completed、Failed 或 Cancelled；其余状态（包括 Cancelling）为 no。
   Session.Idle 只代表空闲，不代表最近任务成功；任务成功与否应看具体终态。
   这些读取是查询时快照，后台任务可以继续变化，会话和任务查询不是同一冻结事务。
-- `/history [CURSOR]` 查看最近 20 条或更早一页，`/close` 关闭当前会话并取消选择。
+- `/history` 默认最近一轮，`/history COUNT` 最近 N 轮（正整数，不足取全部），`/history all` 全部。
+  User 和对应 Assistant 合算一轮，未回答输入也算一轮并提示；保留实际结束原因，正序输出。
+  内部通过稳定游标自动翻页，不再接受用户输入游标，不调用模型。
+  `/close` 关闭当前会话并取消选择。
   Closed 会话可以选择查看，但不能再提问；无当前会话时须新建或选择。
   命令忽略大小写，未知命令或非法参数明确报错，不发送给模型，不记为聊天消息。
 - `/tasks [CURSOR]` 查看当前会话任务；`/task [ID]` 查询状态及已有结果；
