@@ -10,7 +10,7 @@
 
 WorkingMemory 阶段的历史统一运行结果：252 项通过、0 失败、0 跳过；解决方案构建为 0 警告、0 错误。
 其中 ID / Owner 基础测试共 41 项、测试时钟 6 项、Store 46 项、Manager 109 项、跨层组合 50 项。
-完整要求映射与限制见 [WorkingMemory 验收记录](<../../../.docs/WorkingMemory 最小实现与演进计划.md#61-第五步统一验收结果>)。
+完整要求映射与限制见 [WorkingMemory 验收记录](<../../../.docs/disign/WorkingMemory 最小实现与演进计划.md#61-第五步统一验收结果>)。
 
 Context 五步最小版共 77 项测试通过，其中 57 项使用手写工作记忆替身进行独立验证，
 20 项直接组合真实 Builder、Manager 与 Store，使用可控时间，不调用真实 LLM。

@@ -33,8 +33,8 @@ WorkingMemory 是 Memory 模块的一部分，不是新的顶层模块。
 | Task / Session / User / Global | 区分数据归属，不直接等于保存期限。 |
 | 进程内存 / SQLite | 具体存储技术，不决定记忆归属或是否属于工作记忆。 |
 
-本期只实现 [IWorkingMemoryManager](../HanyingAgent/SRC/Contracts/Memory/Operations/IWorkingMemoryManager.cs)，
-复用 [IMemoryWriter](../HanyingAgent/SRC/Contracts/Memory/Operations/IMemoryWriter.cs) 的变更方法。
+本期只实现 [IWorkingMemoryManager](../../HanyingAgent/SRC/Contracts/Memory/Operations/IWorkingMemoryManager.cs)，
+复用 [IMemoryWriter](../../HanyingAgent/SRC/Contracts/Memory/Operations/IMemoryWriter.cs) 的变更方法。
 不实现长期记忆检索，也不改变现有公共接口。
 
 ## 3. 本期必须实现的功能
@@ -64,7 +64,7 @@ WorkingMemory 是 Memory 模块的一部分，不是新的顶层模块。
 
 ### 3.2 数据组织与更新
 
-直接使用 [MemoryItem](../HanyingAgent/SRC/Contracts/Memory/Models/MemoryItem.cs)：
+直接使用 [MemoryItem](../../HanyingAgent/SRC/Contracts/Memory/Models/MemoryItem.cs)：
 
 | 分组 | 字段 |
 |---|---|
@@ -81,7 +81,7 @@ WorkingMemory 是 Memory 模块的一部分，不是新的顶层模块。
 - Confidence 和 Importance 由调用方提供，本期不自动评分。
 - 不基于相同内容自动合并；不同写入可以生成不同记录，不声称具有语义去重。
 
-具体请求见 [Memory Requests](../HanyingAgent/SRC/Contracts/Memory/Operations/Requests/Requests.md)。
+具体请求见 [Memory Requests](../../HanyingAgent/SRC/Contracts/Memory/Operations/Requests/Requests.md)。
 
 ### 3.3 查询规则
 
@@ -123,11 +123,11 @@ InMemoryWorkingMemoryStore
 
 | 组件 | 建议位置 | 职责 |
 |---|---|---|
-| 管理器 | [LocalWorkingMemoryManager](../HanyingAgent/SRC/Capabilities/Memory/LocalWorkingMemoryManager.cs) | 已实现公共操作、业务校验与最近有效项查询。 |
-| 内部存储端口 | [IWorkingMemoryStore](../HanyingAgent/SRC/Capabilities/Memory/IWorkingMemoryStore.cs) | 已定义新增、获取、原子更新、删除和按归属快照能力。 |
-| 内存存储 | [InMemoryWorkingMemoryStore](../HanyingAgent/SRC/Infrastructure/Persistence/InMemoryWorkingMemoryStore.cs) | 已实现实例级 Dictionary、短锁保护和 Owner 候选快照。 |
+| 管理器 | [LocalWorkingMemoryManager](../../HanyingAgent/SRC/Capabilities/Memory/LocalWorkingMemoryManager.cs) | 已实现公共操作、业务校验与最近有效项查询。 |
+| 内部存储端口 | [IWorkingMemoryStore](../../HanyingAgent/SRC/Capabilities/Memory/IWorkingMemoryStore.cs) | 已定义新增、获取、原子更新、删除和按归属快照能力。 |
+| 内存存储 | [InMemoryWorkingMemoryStore](../../HanyingAgent/SRC/Infrastructure/Persistence/InMemoryWorkingMemoryStore.cs) | 已实现实例级 Dictionary、短锁保护和 Owner 候选快照。 |
 | 时钟 | 注入管理器 | 使用 .NET TimeProvider 提供可控时间，不依赖等待真实时间。 |
-| 测试 | [HanyingAgent.Tests](../HanyingAgent/TEST/HanyingAgent.Tests/HanyingAgent.Tests.md) | 已建立正式 xUnit 项目，通过 ProjectReference 引用应用。 |
+| 测试 | [HanyingAgent.Tests](../../HanyingAgent/TEST/HanyingAgent.Tests/HanyingAgent.Tests.md) | 已建立正式 xUnit 项目，通过 ProjectReference 引用应用。 |
 
 ### 4.1 存储方式
 
@@ -153,7 +153,7 @@ ListByOwnerAsync 只返回 Owner 完全一致的候选快照，包括不可读�
 
 通过 TimeProvider 取得时间，测试用可控时钟覆盖到期和更新时间边界。
 不要使用 Thread.Sleep 等待到期，也不要使用本地时间字符串排序。
-已提供 [ManualTimeProvider](../HanyingAgent/TEST/HanyingAgent.Tests/Support/ManualTimeProvider.cs)，
+已提供 [ManualTimeProvider](../../HanyingAgent/TEST/HanyingAgent.Tests/Support/ManualTimeProvider.cs)，
 支持固定 UTC 时间、精确推进与显式回退；仅控制 GetUtcNow，不虚拟化计时器或 Task.Delay。
 每个测试独立创建时钟，管理器已通过构造注入 TimeProvider，生产入口组合时使用 TimeProvider.System。
 查询等待 Store 快照后取得一次 now，对所有候选使用同一时刻；写入的创建与更新时间也使用同一次时钟读取。
@@ -187,7 +187,7 @@ Limit 只限制一次读取数量，不限制存储总量。MVP 不自动淘汰�
 并增加真实 Store 的独立测试，覆盖新增、获取、原子更新、删除、归属快照、预取消、基础输入错误和基本并发访问。
 Manager 单元测试已通过手写 Store 替身覆盖输入校验、操作委托、状态、有效期、Type、排序、Limit、
 异常原样传播和取消。
-第四步新增 [WorkingMemoryBoundaryTests](../HanyingAgent/TEST/HanyingAgent.Tests/WorkingMemory/WorkingMemoryBoundaryTests.cs)，
+第四步新增 [WorkingMemoryBoundaryTests](../../HanyingAgent/TEST/HanyingAgent.Tests/WorkingMemory/WorkingMemoryBoundaryTests.cs)，
 以真实 Manager、内存 Store 和可控时钟覆盖 50 个跨层用例，包括写后可见性、精确归属、
 25 种状态转换、到期相等、更新时间回退保护、排序与 Limit、快照、未知目标、取消以及并发变更。
 第五步已统一核对验收范围并运行全部现有正式测试；组合验收不等同于 Agent 已经接入。
@@ -243,21 +243,21 @@ dotnet run --project .\HanyingAgent.csproj --no-build
 
 | 要求 | 已核对的行为与代表性测试 |
 |---|---|
-| 基本读写与写后可见 | [组合测试](../HanyingAgent/TEST/HanyingAgent.Tests/WorkingMemory/WorkingMemoryBoundaryTests.cs) 的 Mutations_AreVisibleThroughManagerAndPersistTheReturnedRecord 验证写入、更新、遗忘后通过公共接口读取及真实存储结果。 |
+| 基本读写与写后可见 | [组合测试](../../HanyingAgent/TEST/HanyingAgent.Tests/WorkingMemory/WorkingMemoryBoundaryTests.cs) 的 Mutations_AreVisibleThroughManagerAndPersistTheReturnedRecord 验证写入、更新、遗忘后通过公共接口读取及真实存储结果。 |
 | 归属过滤 | 同文件的 OwnerReads_IsolateExactScopeAndIdsWithoutIncludingRelatedScopes 验证四种 Scope、相邻归属与 ID 大小写，不把结构隔离当作授权。 |
 | 状态与有效期 | 同文件的 StatusTransitions_AcceptAllDefinedPairsAndControlVisibility、ExpirationBoundary_ChangesVisibilityWithoutChangingStoredRecord、Reactivation_DoesNotBypassExpirationAndNullUpdateCanClearIt 覆盖全部 25 种转换、恰好到期、重新激活与清除有效期。 |
-| 排序与数量 | 同文件的 FilteringAndOrdering_HappenBeforeDefaultAndExplicitLimits，加上 [Manager 测试](../HanyingAgent/TEST/HanyingAgent.Tests/WorkingMemory/LocalWorkingMemoryManagerTests.cs) 的 ListRecentAsync_FiltersThenSortsOrdinallyThenLimits，验证先过滤、再按更新时间与 Ordinal ID 排序、最后取 Limit。 |
-| 原子变更与并发保护 | [Store 测试](../HanyingAgent/TEST/HanyingAgent.Tests/WorkingMemory/InMemoryWorkingMemoryStoreTests.cs) 的并发新增、重复 ID、更新和删除，以及组合测试的 ConcurrentUpdatesAndQueries_ExposeWholePayloadsAndMonotonicUpdatedAt、ConcurrentForgetAndUpdate_DoNotResurrectDeletedRecord。 |
+| 排序与数量 | 同文件的 FilteringAndOrdering_HappenBeforeDefaultAndExplicitLimits，加上 [Manager 测试](../../HanyingAgent/TEST/HanyingAgent.Tests/WorkingMemory/LocalWorkingMemoryManagerTests.cs) 的 ListRecentAsync_FiltersThenSortsOrdinallyThenLimits，验证先过滤、再按更新时间与 Ordinal ID 排序、最后取 Limit。 |
+| 原子变更与并发保护 | [Store 测试](../../HanyingAgent/TEST/HanyingAgent.Tests/WorkingMemory/InMemoryWorkingMemoryStoreTests.cs) 的并发新增、重复 ID、更新和删除，以及组合测试的 ConcurrentUpdatesAndQueries_ExposeWholePayloadsAndMonotonicUpdatedAt、ConcurrentForgetAndUpdate_DoNotResurrectDeletedRecord。 |
 | 时间不倒退与快照 | 组合测试的 ClockRollback_LastAppliedContentWinsButUpdatedAtDoesNotRegress、ReturnedSnapshots_DoNotChangeAfterUpdatesAddsOrDeletes 验证后应用覆盖和旧结果稳定。 |
 | 明确错误与取消 | Manager 测试的 Operations_PropagateStoreFailureWithoutRetry，以及组合测试的 InvalidUpdate_DoesNotPartiallyChangeStoredRecord、UnknownAndDeletedTargets_FailWithoutRecreatingRecords、PreCancellation_LeavesTheRealStoreUnchanged、CancellationBetweenValidationAndStorage_PreventsMutation。 |
-| 独立、可重复测试 | [正式测试项目](../HanyingAgent/TEST/HanyingAgent.Tests/HanyingAgent.Tests.md) 通过 ProjectReference 引用应用，测试使用独立状态与可控时钟，不依赖 Agent、LLM、数据库、MCP 或真实时间等待。 |
+| 独立、可重复测试 | [正式测试项目](../../HanyingAgent/TEST/HanyingAgent.Tests/HanyingAgent.Tests.md) 通过 ProjectReference 引用应用，测试使用独立状态与可控时钟，不依赖 Agent、LLM、数据库、MCP 或真实时间等待。 |
 
 结论：本期“基本读写、归属过滤、有效期、排序、并发保护和独立测试”已达到学习版 MVP 要求。
 这不表示所有线程调度、生产负载或远程失败模式均已验证。
 
 ### 6.3 可调用方式与验收边界
 
-使用示例见 [Memory 模块说明](../HanyingAgent/SRC/Capabilities/Memory/Memory.md)。
+使用示例见 [Memory 模块说明](../../HanyingAgent/SRC/Capabilities/Memory/Memory.md)。
 后续调用方通过 IWorkingMemoryManager 使用能力，入口负责组合 Manager、共享的 Store 实例与 TimeProvider.System；
 不需要由 Agent 直接操作 Dictionary 或依赖具体 Store。
 
@@ -315,7 +315,7 @@ dotnet run --project .\HanyingAgent.csproj --no-build
 | 第四步：边界与并发 | 补齐到期相等、时间回退、同 ID 原子覆盖、取消和快照隔离等行为测试。 | 已增加真实 Manager + Store 的 50 个跨层用例，并覆盖基本并发竞争。 |
 | 第五步：组合验收 | 统一核对 MVP 验收范围，运行相关正式测试并确认模块状态与限制。 | 已完成；252 个测试统一通过，构建 0 警告、0 错误，验收证据与限制见第 6 节。 |
 
-基础、Store、Manager 和跨层边界测试运行命令见 [测试项目说明](../HanyingAgent/TEST/HanyingAgent.Tests/HanyingAgent.Tests.md)。
+基础、Store、Manager 和跨层边界测试运行命令见 [测试项目说明](../../HanyingAgent/TEST/HanyingAgent.Tests/HanyingAgent.Tests.md)。
 五步现已完成，后续可单独设计 Context 和任务执行接入；不将记忆模块可用等同于完整 Agent 已可运行。
 
 本期成功的标志：得到一个边界清晰、行为可测、可以被 Agent 使用的工作记忆模块，
@@ -324,6 +324,6 @@ dotnet run --project .\HanyingAgent.csproj --no-build
 ## 10. 相关文档
 
 - [模块职责与运行流程](<./HanyingAgent 模块职责与运行流程.md>)。
-- [Memory 契约](../HanyingAgent/SRC/Contracts/Memory/Memory.md)。
-- [Memory 操作约定](../HanyingAgent/SRC/Contracts/Memory/Operations/Operations.md)。
+- [Memory 契约](../../HanyingAgent/SRC/Contracts/Memory/Memory.md)。
+- [Memory 操作约定](../../HanyingAgent/SRC/Contracts/Memory/Operations/Operations.md)。
 - [本地模块与远程 Service 演进设计](<./Agent Runtime 本地模块与远程 Service 演进设计.md>)。

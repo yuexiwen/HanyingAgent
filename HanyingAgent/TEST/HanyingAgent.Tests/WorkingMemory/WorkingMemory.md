@@ -66,7 +66,7 @@ Store 测试直接创建真实实例，不启动 Agent，也不使用 Mock 库�
 
 ## 第五步统一验收与后续边界
 
-2026-11-09 已完成 [WorkingMemory 计划](<../../../../.docs/WorkingMemory 最小实现与演进计划.md>) 的第五步：
+2026-11-09 已完成 [WorkingMemory 计划](<../../../../.docs/disign/WorkingMemory 最小实现与演进计划.md>) 的第五步：
 统一运行基础契约、测试时钟、Store、Manager 和跨层组合测试，共 252 项通过、0 失败、0 跳过。
 解决方案零警告构建，应用入口行为不变，测试源码未进入应用编译。
 
