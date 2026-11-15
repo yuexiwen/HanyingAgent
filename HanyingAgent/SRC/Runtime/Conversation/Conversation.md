@@ -23,6 +23,10 @@
 
 ## 对话协调
 
+[ConversationHistoryReader](./ConversationHistoryReader.cs) 提供面向历史查看的最近 N 轮读取；
+maxTurns 为 null 时读取全部，为正整数时按 User 记录计数，包含未回答输入，使用稳定游标翻页后正序返回。
+不解析 Console 命令、不渲染输出、不调用模型，也不代替 ConversationWindow 的模型历史筛选。
+
 任务编排将不可变执行配置映射为 [DialogueRequest](./DialogueRequest.cs)，Runtime 不依赖 Console 或 Host 配置类型。
 
 ```text

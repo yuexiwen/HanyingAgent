@@ -99,6 +99,7 @@ public static class ApplicationHost
         builder.Services.AddSingleton<ISessionManager>(services => services.GetRequiredService<LocalSessionManager>());
         builder.Services.AddSingleton<IConversationManager, LocalConversationManager>();
         builder.Services.AddSingleton<ConversationWindow>();
+        builder.Services.AddSingleton<ConversationHistoryReader>();
         builder.Services.AddTransient<DialogueCoordinator>();
         builder.Services.AddSingleton(services =>
         {
@@ -110,8 +111,8 @@ public static class ApplicationHost
         builder.Services.AddSingleton<LocalTaskManager>();
         builder.Services.AddSingleton<ITaskManager>(services => services.GetRequiredService<LocalTaskManager>());
         builder.Services.AddHostedService(services => services.GetRequiredService<LocalTaskManager>());
-        builder.Services.AddSingleton<TextReader>(Console.In);
-        builder.Services.AddSingleton<TextWriter>(Console.Out);
+        builder.Services.AddSingleton<TextReader>(System.Console.In);
+        builder.Services.AddSingleton<TextWriter>(System.Console.Out);
         builder.Services.AddSingleton<ConsoleApplication>();
         return builder;
     }

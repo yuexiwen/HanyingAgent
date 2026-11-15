@@ -54,9 +54,11 @@ Windows PowerShell 5.1 的管道默认编码可能丢失中文，可先执行 `$
 | `/new 名称` | 创建并选择新会话。 |
 | `/session [完整ID]` | 查询指定或当前会话详情，不改变当前选择；显示任务状态及是否结束。 |
 | `/sessions` | 列出本地用户的会话、任务状态及是否结束，星号标识当前会话。 |
-| `/use 完整ID` | 切换到指定会话并显示详情，不自动执行或发送历史。 |
-| `/history` | 查看当前会话最近 20 条消息及实际结束原因。 |
-| `/history 游标` | 查看提示中指定的更早一页。 |
+| `/use 编号或完整ID` | 按当前可见列表的编号选择会话，也保留完整 ID 访问。 |
+| `/delete 编号` | 从列表隐藏会话，不删除数据、不关闭会话、不取消任务；隐藏当前会话后取消选择。 |
+| `/history` | 查看最近一轮问答，User 与对应 Assistant 合算一轮。 |
+| `/history 数量` | 查看最近指定轮数，不足时显示全部，按时间顺序展示。 |
+| `/history all` | 查看全部历史问答。 |
 | `/tasks [游标]` | 当前会话的最近任务，默认 20 条，可向更早记录翻页。 |
 | `/task [完整TaskId]` | 查询状态、版本及已保存结果。 |
 | `/wait [完整TaskId]` | 等待结果；已展示的结果只显示状态，重看正文用 `/task`。 |
@@ -65,6 +67,10 @@ Windows PowerShell 5.1 的管道默认编码可能丢失中文，可先执行 `$
 | `/exit` | 退出并请求取消全部后台任务。 |
 
 命令不调用模型；关闭后可选择查看历史，但不能继续提问。关闭后用 `/new` 或 `/use` 选择可写会话。
+`/sessions` 从 1 开始连续编号；隐藏后立即展示重排列表。编号是当前列表位置，不是持久 ID，
+隐藏或创建后应以最新列表为准。隐藏会话仍能通过完整 ID 查询或选择，选择不会自动恢复列表可见性。
+历史轮数按 User 输入计数，包括失败或未回答的输入，未记录回复时明确提示；保留实际 Assistant 结束原因。
+`/history` 不再接收分页游标，内部自动读取旧页；`all` 输出可能较长，但不会把历史发送给模型。
 会话详情显示是否选中、创建及最近活动时间。详情和列表优先显示当前任务，无当前任务则显示最近任务；
 没有提交过任务时明确显示 Task: none。`Finished: yes` 包含 Completed、Failed、Cancelled，
 只代表任务已结束；成功需要状态为 Completed。Cancelling 仍是未结束，Session.Idle 也不代表任务成功。
@@ -123,6 +129,9 @@ Agent 配置包括 SystemInstruction、MaxInputCharacters、MaxOutputTokens、Te
 - [HanyingAgent.csproj](./HanyingAgent.csproj) 定义项目构建，并排除 TEST 子树，防止测试源码混入应用。
 - [HanyingAgent.slnx](./HanyingAgent.slnx) 组织应用与测试项目，便于编辑器发现和统一构建。
 - [Program.cs](./Program.cs) 负责 Host 启停；[ApplicationHost](./SRC/Host/ApplicationHost.cs) 集中配置 DI、Options 与日志，不承载具体业务规则。
+- [ConsoleApplication](./SRC/Host/ConsoleApplication.cs) 保留交互协调入口；
+  命令、渲染与界面状态拆至 [Host/Console](./SRC/Host/Console/Console.md)，
+  历史轮数读取由 [ConversationHistoryReader](./SRC/Runtime/Conversation/ConversationHistoryReader.cs) 提供。
 - bin、obj 是生成目录，不编写模块文档，也不作为业务模块维护。
 - 目录分组不等于微服务划分；业务模块通过契约协作，具体实现由入口组合。
 

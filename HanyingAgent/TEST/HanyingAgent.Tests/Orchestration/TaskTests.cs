@@ -672,6 +672,45 @@ public sealed class TaskTests
         await fixture.AssertIdle(session.Id);
     }
 
+    [Fact]
+    public async Task HideSessionRetainsRunningTaskAndOwnershipAndDoesNotCancelExecution()
+    {
+        var entered = Signal();
+        var release = Signal();
+        await using var fixture = await Fixture.Create(new ModelStub(async (_, token) =>
+        {
+            entered.TrySetResult();
+            await release.Task.WaitAsync(token);
+            return Answer();
+        }));
+        var session = await fixture.NewSession();
+        var task = await fixture.Submit(session.Id, "question");
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await fixture.Sessions.HideAsync(session.Id, CancellationToken.None);
+            await fixture.Sessions.HideAsync(session.Id, CancellationToken.None);
+            Assert.DoesNotContain(await fixture.Sessions.ListAsync(CancellationToken.None), item => item.Id == session.Id);
+            Assert.Equal(task.Id, (await fixture.Sessions.GetAsync(session.Id, CancellationToken.None))!.CurrentTaskId);
+            Assert.Null(await fixture.Tasks.GetResultAsync(task.Id, CancellationToken.None));
+            var foreign = await fixture.Host.Services.GetRequiredService<IUserManager>()
+                .CreateAsync(new CreateUserRequest("other"), CancellationToken.None);
+            var other = fixture.Host.Services.GetRequiredService<ISessionStore>()
+                .Add(foreign.Id, "Other", DateTimeOffset.UtcNow, CancellationToken.None);
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+                fixture.Sessions.HideAsync(other.Id, CancellationToken.None));
+            await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+                fixture.Sessions.HideAsync(new SessionId("missing"), CancellationToken.None));
+        }
+        finally
+        {
+            release.TrySetResult();
+        }
+        Assert.Equal(TaskStatus.Completed, (await fixture.Wait(task.Id)).Status);
+        Assert.Equal(2, (await fixture.History(session.Id)).Items.Count);
+        await fixture.AssertIdle(session.Id);
+    }
+
     private static TaskCompletionSource Signal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
     private static ModelResponse Answer() => new("answer", [], ModelFinishReason.Stop);
     private static string[] Texts(ModelInvocation invocation) => invocation.Messages.Select(message => message switch
