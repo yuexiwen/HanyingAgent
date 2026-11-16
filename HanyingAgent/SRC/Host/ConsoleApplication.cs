@@ -17,13 +17,14 @@ public sealed class ConsoleApplication(
     LocalUserContext identity,
     ILogger<ConsoleApplication> logger,
     TextReader input,
-    TextWriter output)
+    TextWriter output,
+    ConsoleLogControl consoleLogs)
 {
     public async Task RunAsync(CancellationToken cancellationToken)
     {
         var state = new ConsoleState();
         var renderer = new ConsoleRenderer(output);
-        var commands = new ConsoleCommandHandler(tasks, sessions, history, state, renderer);
+        var commands = new ConsoleCommandHandler(tasks, sessions, history, state, renderer, consoleLogs);
         Task<string?>? read = null;
         using var notifications = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         await renderer.ShowHelpAsync();

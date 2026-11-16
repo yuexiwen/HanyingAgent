@@ -15,7 +15,8 @@ internal sealed class ConsoleCommandHandler(
     ISessionManager sessions,
     ConversationHistoryReader history,
     ConsoleState state,
-    ConsoleRenderer renderer)
+    ConsoleRenderer renderer,
+    ConsoleLogControl consoleLogs)
 {
     public async Task HandleAsync(
         string line, UserId userId, CancellationToken notificationToken, CancellationToken token)
@@ -34,6 +35,27 @@ internal sealed class ConsoleCommandHandler(
         var argument = command.Length == 2 ? command[1] : null;
         switch (command[0].ToLowerInvariant())
         {
+            case "/help" when argument is null:
+                await renderer.ShowHelpAsync();
+                break;
+            case "/logs":
+                if (argument is not null)
+                {
+                    if (argument.Equals("on", StringComparison.OrdinalIgnoreCase))
+                    {
+                        consoleLogs.Enabled = true;
+                    }
+                    else if (argument.Equals("off", StringComparison.OrdinalIgnoreCase))
+                    {
+                        consoleLogs.Enabled = false;
+                    }
+                    else
+                    {
+                        throw new ArgumentException("Use /logs, /logs on, or /logs off.");
+                    }
+                }
+                await renderer.WriteLineAsync($"Console logs: {(consoleLogs.Enabled ? "on" : "off")}.");
+                break;
             case "/new":
                 ArgumentException.ThrowIfNullOrWhiteSpace(argument);
                 var created = await sessions.CreateAsync(new CreateSessionRequest(userId, argument), token);
@@ -163,10 +185,15 @@ internal sealed class ConsoleCommandHandler(
         {
             await renderer.WriteLineAsync("[No visible sessions. Use /new NAME.]");
         }
+        var rows = new List<(SessionInfo Session, TaskInfo? Task)>();
         for (var index = 0; index < visible.Count; index++)
         {
             var session = visible[index];
-            await renderer.RenderSessionRowAsync(index + 1, session, state.Current, await GetSessionTaskAsync(session, token));
+            rows.Add((session, await GetSessionTaskAsync(session, token)));
+        }
+        if (rows.Count != 0)
+        {
+            await renderer.RenderSessionListAsync(rows, state.Current);
         }
     }
 
