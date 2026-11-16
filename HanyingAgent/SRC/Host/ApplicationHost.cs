@@ -21,6 +21,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Console;
 using Microsoft.Extensions.Options;
+using HanyingAgent.Host.Console;
 
 namespace HanyingAgent.Host;
 
@@ -34,6 +35,9 @@ public static class ApplicationHost
             ContentRootPath = AppContext.BaseDirectory
         });
         builder.Logging.ClearProviders();
+        var consoleLogs = new ConsoleLogControl();
+        builder.Services.AddSingleton(consoleLogs);
+        builder.Services.PostConfigure<LoggerFilterOptions>(consoleLogs.ApplyTo);
         builder.Logging.AddSimpleConsole(options =>
         {
             options.IncludeScopes = true;

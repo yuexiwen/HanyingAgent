@@ -18,6 +18,9 @@
   [ConversationHistoryReader](../Runtime/Conversation/ConversationHistoryReader.cs) 由 DI 注册，
   在 Conversation 模块读取最近 N 轮或全部记录，与模型 Context 窗口及终端渲染分离。
 - [ApplicationHost](./ApplicationHost.cs) 统一注册配置、日志、记忆、Context、类型化 HTTP 模型客户端和执行器。
+- `/logs` 查询标准控制台日志开关，`/logs off` 屏蔽全部级别，`/logs on` 按原有配置恢复。
+  通过 [ConsoleLogControl](./Console/ConsoleLogControl.cs) 和标准 LoggerFilterOptions 实现，
+  不修改其他 Provider 或交互输出；开关为进程级、默认开启，不持久化。已排队日志可能仍会输出。
 - [ConsoleApplication](./ConsoleApplication.cs) 提交任务后立即显示 TaskId，并异步等待该任务的结果。
   当前会话完成时自动展示回答、失败或取消；其他会话完成时显示带 SessionId / TaskId 的通知，
   不混入当前会话回答，切换回该会话后展示尚未阅读的更新。
