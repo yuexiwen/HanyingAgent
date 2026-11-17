@@ -131,7 +131,7 @@ Agent 配置包括 SystemInstruction、MaxInputCharacters、MaxOutputTokens、Te
 - [Program.cs](./Program.cs) 负责 Host 启停；[ApplicationHost](./SRC/Host/ApplicationHost.cs) 集中配置 DI、Options 与日志，不承载具体业务规则。
 - [ConsoleApplication](./SRC/Host/ConsoleApplication.cs) 保留交互协调入口；
   命令、渲染与界面状态拆至 [Host/Console](./SRC/Host/Console/Console.md)，
-  历史轮数读取由 [ConversationHistoryReader](./SRC/Runtime/Conversation/ConversationHistoryReader.cs) 提供。
+  历史轮数读取由 [ConversationHistoryReader](./SRC/Capabilities/Conversation/ConversationHistoryReader.cs) 提供。
 - bin、obj 是生成目录，不编写模块文档，也不作为业务模块维护。
 - 目录分组不等于微服务划分；业务模块通过契约协作，具体实现由入口组合。
 

@@ -3,7 +3,7 @@ using HanyingAgent.Contracts.Conversation.Operations.Requests;
 using HanyingAgent.Contracts.Conversation.Operations.Responses;
 using HanyingAgent.Contracts.Users.Models;
 
-namespace HanyingAgent.Runtime.Conversation;
+namespace HanyingAgent.Capabilities.Conversation;
 
 public interface IConversationStore
 {

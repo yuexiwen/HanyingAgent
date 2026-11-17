@@ -15,8 +15,8 @@
   - [ConsoleState](./Console/ConsoleState.cs)：当前选择、最近任务、待展示、未读与已展示标记。
   三个 Console 专属组件位于 [Console](./Console/Console.md)，在每次 RunAsync 中创建并共享；
   不注册为全局共享状态，仍通过入口注入的 TextReader / TextWriter 使用同一输入输出通道。
-  [ConversationHistoryReader](../Runtime/Conversation/ConversationHistoryReader.cs) 由 DI 注册，
-  在 Conversation 模块读取最近 N 轮或全部记录，与模型 Context 窗口及终端渲染分离。
+  [ConversationHistoryReader](../Capabilities/Conversation/ConversationHistoryReader.cs) 由 DI 注册，
+  在 Capabilities 的 Conversation 模块读取最近 N 轮或全部记录，与模型 Context 窗口及终端渲染分离。
 - [ApplicationHost](./ApplicationHost.cs) 统一注册配置、日志、记忆、Context、类型化 HTTP 模型客户端和执行器。
 - `/logs` 查询标准控制台日志开关，`/logs off` 屏蔽全部级别，`/logs on` 按原有配置恢复。
   通过 [ConsoleLogControl](./Console/ConsoleLogControl.cs) 和标准 LoggerFilterOptions 实现，

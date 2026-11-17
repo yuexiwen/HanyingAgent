@@ -3,7 +3,7 @@ using HanyingAgent.Contracts.Sessions.Operations;
 using HanyingAgent.Contracts.Sessions.Operations.Requests;
 using HanyingAgent.Diagnostics;
 using HanyingAgent.Host.Console;
-using HanyingAgent.Runtime.Conversation;
+using HanyingAgent.Capabilities.Conversation;
 using HanyingAgent.Runtime.Tasks;
 using HanyingAgent.Runtime.Users;
 using Microsoft.Extensions.Logging;

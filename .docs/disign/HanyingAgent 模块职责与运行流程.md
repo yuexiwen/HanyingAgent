@@ -20,11 +20,11 @@ Ollama 模型适配器，以及 Generic Host / DI、关联日志和 DirectExecut
 ```text
 Host：用户交互
   ↓
-Runtime：会话与任务协调、历史、执行流程、Context、执行状态
+Runtime：会话与任务管理、执行流程、Context、执行状态
   ↓
 能力契约：User / Session / Task / Conversation / Memory / Tools / LanguageModels
   ↓
-能力与技术实现：Memory、Skills、Tools、模型适配、持久化、可观测性
+能力与技术实现：Conversation、Memory、Skills、Tools、模型适配、持久化、可观测性
 ```
 
 上图表达逻辑协作，不是所有接口必须经过同一个运行组件，也不表示每个业务能力都已有独立实现目录。
@@ -37,7 +37,7 @@ Runtime：会话与任务协调、历史、执行流程、Context、执行状态
 | [User](../../HanyingAgent/SRC/Contracts/Users/Users.md) | 管理用户标识、显示名称和资料时间。 | 不管理所有用户关联数据，不等于认证或授权服务。 |
 | [Session](../../HanyingAgent/SRC/Contracts/Sessions/Sessions.md) | 管理会话身份、所属 UserId、生命周期和当前任务关联。 | 不保存完整历史，不负责界面，不携带执行句柄。 |
 | [Task](../../HanyingAgent/SRC/Contracts/Tasks/Tasks.md) | 定义一次工作的公共快照、结果和提交、查询、补充、取消协议。 | 不把每条消息都当作新任务，不独立维护另一套矛盾的执行状态。 |
-| [Conversation](../../HanyingAgent/SRC/Runtime/Conversation/Conversation.md) | 管理真实交互的追加、确定顺序、归属和历史读取。 | 不渲染界面，不选择全部模型输入，不决定数据库技术。 |
+| [Conversation](../../HanyingAgent/SRC/Capabilities/Conversation/Conversation.md) | 在 Capabilities 中管理真实交互的追加、确定顺序、归属和历史读取，为 Runtime 提供数据。 | 不驱动执行流程，不渲染界面，不选择全部模型输入，不决定数据库技术。 |
 | [Memory](../../HanyingAgent/SRC/Capabilities/Memory/Memory.md) | 管理可复用语义信息的写入、修正、读取、检索、失效和遗忘。 | 不等于全部聊天历史，不管理当前执行步骤。 |
 | [Skills](../../HanyingAgent/SRC/Capabilities/Skills/Skills.md) | 提供任务方法、SOP、参考资料和选择线索。 | 不代替工具实现，也不直接推进任务控制流。 |
 | [Context](../../HanyingAgent/SRC/Runtime/Context/Context.md) | 为本轮模型调用选择、排序、压缩并组装消息和工具定义。 | 不管理来源数据的生命周期，不默认发送全部历史。 |

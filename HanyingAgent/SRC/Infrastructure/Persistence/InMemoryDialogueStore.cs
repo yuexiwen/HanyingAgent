@@ -5,7 +5,7 @@ using HanyingAgent.Contracts.Conversation.Operations.Requests;
 using HanyingAgent.Contracts.Conversation.Operations.Responses;
 using HanyingAgent.Contracts.Sessions.Models;
 using HanyingAgent.Contracts.Users.Models;
-using HanyingAgent.Runtime.Conversation;
+using HanyingAgent.Capabilities.Conversation;
 using HanyingAgent.Runtime.Sessions;
 using HanyingAgent.Runtime.Users;
 using HanyingAgent.Runtime.Tasks;

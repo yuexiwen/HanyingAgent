@@ -3,6 +3,7 @@
 ## 功能与定位
 
 管理对话历史，负责消息追加、会话内顺序和历史读取，为 Host 展示及 Context 构建提供数据。
+与 Memory 一样，作为数据支撑能力供运行流程使用，不负责推进执行流程。
 
 当前已实现 [LocalConversationManager](./LocalConversationManager.cs)、
 [IConversationStore](./IConversationStore.cs) 和 [ConversationHistoryReader](./ConversationHistoryReader.cs)；
@@ -27,11 +28,11 @@
 maxTurns 为 null 时读取全部，为正整数时按 User 记录计数，包含未回答输入，使用稳定游标翻页后正序返回。
 不解析 Console 命令、不渲染输出、不调用模型，也不代替 ConversationWindow 的模型历史筛选。
 
-一轮对话的执行流程由 [DialogueOrchestrator](../Orchestration/DialogueOrchestrator.cs)
+一轮对话的执行流程由 [DialogueOrchestrator](../../Runtime/Orchestration/DialogueOrchestrator.cs)
 编排，不属于历史管理模块。模型历史筛选由
-[Context/ConversationWindow](../Context/ConversationWindow.cs) 负责。
+[Context/ConversationWindow](../../Runtime/Context/ConversationWindow.cs) 负责。
 Conversation 提供消息读写能力，不依赖执行器、不驱动模型调用；
-流程、失败处理和日志边界见 [Orchestration](../Orchestration/Orchestration.md)。
+流程、失败处理和日志边界见 [Orchestration](../../Runtime/Orchestration/Orchestration.md)。
 
 ## 后续组件规划
 
@@ -51,3 +52,5 @@ Conversation 提供消息读写能力，不依赖执行器、不驱动模型调�
 - 公共 IConversationManager 已定义，具体实现需按稳定 MessageId 处理重试、冲突并分配会话内 Sequence。
 - 读取默认最近 20 条，页内 Sequence 升序，游标继续读取更早历史；不自动将结果当作完整模型上下文。
 - 历史内容独立于 ModelMessage，Context 转换时须保留工具关联、实际结束原因和失败信息。
+- 当前本地实现仍依赖 Runtime.Users.LocalUserContext 获取可信身份；
+  本次仅调整模块归属，不新增身份抽象，也不宣称已完成独立部署或全部依赖解耦。

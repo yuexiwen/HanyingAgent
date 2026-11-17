@@ -5,7 +5,7 @@ using HanyingAgent.Contracts.Sessions.Operations.Requests;
 using HanyingAgent.Contracts.Tasks.Models;
 using HanyingAgent.Contracts.Tasks.Operations.Requests;
 using HanyingAgent.Contracts.Users.Models;
-using HanyingAgent.Runtime.Conversation;
+using HanyingAgent.Capabilities.Conversation;
 using HanyingAgent.Runtime.Tasks;
 
 namespace HanyingAgent.Host.Console;

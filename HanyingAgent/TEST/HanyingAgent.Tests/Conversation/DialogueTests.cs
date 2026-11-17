@@ -16,7 +16,7 @@ using HanyingAgent.Contracts.Users.Operations.Requests;
 using HanyingAgent.Host;
 using HanyingAgent.Host.Configuration;
 using HanyingAgent.Runtime.Context;
-using HanyingAgent.Runtime.Conversation;
+using HanyingAgent.Capabilities.Conversation;
 using HanyingAgent.Runtime.Orchestration;
 using HanyingAgent.Runtime.Sessions;
 using HanyingAgent.Runtime.Users;

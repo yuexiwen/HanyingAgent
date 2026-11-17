@@ -12,7 +12,7 @@ using HanyingAgent.Contracts.Sessions.Operations;
 using HanyingAgent.Contracts.Conversation.Operations;
 using HanyingAgent.Runtime.Users;
 using HanyingAgent.Runtime.Sessions;
-using HanyingAgent.Runtime.Conversation;
+using HanyingAgent.Capabilities.Conversation;
 using HanyingAgent.Runtime.Orchestration;
 using HanyingAgent.Runtime.Tasks;
 using HanyingAgent.Contracts.Tasks.Operations;

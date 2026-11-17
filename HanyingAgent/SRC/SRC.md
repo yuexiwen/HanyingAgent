@@ -11,7 +11,7 @@
 | [Contracts](./Contracts/Contracts.md) | 定义模块之间的能力接口、标识和数据协议。 |
 | [Host](./Host/Host.md) | 将用户命令和输入适配成 Runtime 操作，并展示结果与事件。 |
 | [Runtime](./Runtime/Runtime.md) | 协调任务生命周期、执行策略、Context 构建和执行状态。 |
-| [Capabilities](./Capabilities/Capabilities.md) | 实现记忆、技能和工具等可供 Runtime 使用的业务能力。 |
+| [Capabilities](./Capabilities/Capabilities.md) | 实现历史管理、记忆、技能和工具等可供 Runtime 使用的业务能力。 |
 | [Infrastructure](./Infrastructure/Infrastructure.md) | 实现模型访问、存储和可观测性等技术适配。 |
 | [Diagnostics](./Diagnostics/LogEvents.cs) | 共享跨模块日志事件编号与名称，不承载日志实现或业务逻辑。 |
 
