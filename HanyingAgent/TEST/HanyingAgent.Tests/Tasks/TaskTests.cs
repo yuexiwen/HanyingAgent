@@ -16,8 +16,8 @@ using HanyingAgent.Contracts.Tasks.Operations.Requests;
 using HanyingAgent.Contracts.Users.Operations;
 using HanyingAgent.Contracts.Users.Operations.Requests;
 using HanyingAgent.Host;
-using HanyingAgent.Runtime.Conversation;
-using HanyingAgent.Runtime.Orchestration;
+using HanyingAgent.Capabilities.Conversation;
+using HanyingAgent.Runtime.Tasks;
 using HanyingAgent.Runtime.Sessions;
 using HanyingAgent.Runtime.Users;
 using HanyingAgent.Tests.Support;
@@ -26,7 +26,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using TaskStatus = HanyingAgent.Contracts.Tasks.Models.TaskStatus;
 
-namespace HanyingAgent.Tests.Orchestration;
+namespace HanyingAgent.Tests.Tasks;
 
 public sealed class TaskTests
 {

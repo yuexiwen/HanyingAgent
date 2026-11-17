@@ -56,7 +56,7 @@ Store 按管理器传入的可信 owner 验证归属；这些内部端口不是�
 存储不决定记忆分类、权限政策或执行策略；这些由对应业务模块管理。
 长期搜索索引是派生数据，不能代替权威记录；离线或增量索引更新应可恢复并覆盖更新与删除。
 Checkpoint 保存所需工作记忆，不复制整个 User / Global 长期数据集或索引；不序列化锁和取消源。
-Conversation Store 的接口与管理边界见 [Runtime/Conversation](../../Runtime/Conversation/Conversation.md)；
+Conversation Store 的接口与管理边界见 [Capabilities/Conversation](../../Capabilities/Conversation/Conversation.md)；
 可以与其他模块共用 SQLite 数据库，但不把所有历史内容塞进 SessionInfo。
 User Store 已提供内存版，公共协议见 [Contracts/Users](../../Contracts/Users/Users.md)。
 会话记录必须保存 UserId，未来可为其建立索引；旧记录需要明确迁移归属，不能恢复成默认用户或当前调用者。

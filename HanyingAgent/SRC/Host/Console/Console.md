@@ -15,8 +15,8 @@ Console 专属交互组件，不承担 Session / Task 的权威存储、业务�
 命令处理器通过管理器读取数据后交给 Renderer；所有渲染由主循环或其等待的命令处理调用完成，
 后台任务不直接写终端。
 
-历史读取与轮数选择由 Runtime 的
-[ConversationHistoryReader](../../Runtime/Conversation/ConversationHistoryReader.cs) 完成。
+历史读取与轮数选择由 Capabilities 的
+[ConversationHistoryReader](../../Capabilities/Conversation/ConversationHistoryReader.cs) 完成。
 `/history` 的数量解析属于命令适配，显示格式与未记录回复的提示属于渲染。
 
 ## 终端美化

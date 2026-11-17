@@ -9,12 +9,12 @@
 会话不嵌入消息集合，通过 SessionId 读取独立 Conversation。
 
 正式任务接受时原子设置 Active 与 CurrentTaskId，任务结果保存时原子恢复 Idle 并清空关联；
-忙时拒绝新任务和关闭，不排队。具体编排见 [Orchestration](../Orchestration/Orchestration.md)。
+忙时拒绝新任务和关闭，不排队。任务生命周期见 [Tasks](../Tasks/Tasks.md)。
 BeginTurnAsync 保留为可信进程内独立对话入口，使用同一 Session.Active 状态保护，不创建伪造 TaskId。
 任务路径不再获取第二份 turn lease，两种入口互斥；独立对话异常和取消也释放占用。
 不同会话可以分别执行。这是进程内协调，不是跨进程锁。
 Closed 会话允许读取历史、重复关闭，拒绝新输入；关闭不删除历史。
-直接追加历史属于可信进程内 API，不用于替代 DialogueCoordinator 发起执行。
+直接追加历史属于可信进程内 API，不用于替代 DialogueOrchestrator 发起执行。
 
 Console 通过 `/new NAME` 创建并选择、`/session [ID]` 查询详情、`/sessions` 列表、
 `/use INDEX|ID` 选择会话。列表编号从 1 连续排列，隐藏后重排，不作为 SessionId 保存。

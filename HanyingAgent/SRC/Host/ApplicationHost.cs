@@ -12,8 +12,9 @@ using HanyingAgent.Contracts.Sessions.Operations;
 using HanyingAgent.Contracts.Conversation.Operations;
 using HanyingAgent.Runtime.Users;
 using HanyingAgent.Runtime.Sessions;
-using HanyingAgent.Runtime.Conversation;
+using HanyingAgent.Capabilities.Conversation;
 using HanyingAgent.Runtime.Orchestration;
+using HanyingAgent.Runtime.Tasks;
 using HanyingAgent.Contracts.Tasks.Operations;
 using HanyingAgent.Contracts.LanguageModels.Models;
 using Microsoft.Extensions.DependencyInjection;
@@ -104,7 +105,7 @@ public static class ApplicationHost
         builder.Services.AddSingleton<IConversationManager, LocalConversationManager>();
         builder.Services.AddSingleton<ConversationWindow>();
         builder.Services.AddSingleton<ConversationHistoryReader>();
-        builder.Services.AddTransient<DialogueCoordinator>();
+        builder.Services.AddTransient<DialogueOrchestrator>();
         builder.Services.AddSingleton(services =>
         {
             var settings = services.GetRequiredService<IOptions<AgentSettings>>().Value;

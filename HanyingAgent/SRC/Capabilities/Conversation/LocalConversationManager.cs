@@ -4,7 +4,7 @@ using HanyingAgent.Contracts.Conversation.Operations.Requests;
 using HanyingAgent.Contracts.Conversation.Operations.Responses;
 using HanyingAgent.Runtime.Users;
 
-namespace HanyingAgent.Runtime.Conversation;
+namespace HanyingAgent.Capabilities.Conversation;
 
 public sealed class LocalConversationManager(
     IConversationStore store,

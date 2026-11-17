@@ -3,7 +3,7 @@ using HanyingAgent.Contracts.Conversation.Operations;
 using HanyingAgent.Contracts.Conversation.Operations.Requests;
 using HanyingAgent.Contracts.Sessions.Models;
 
-namespace HanyingAgent.Runtime.Conversation;
+namespace HanyingAgent.Capabilities.Conversation;
 
 public sealed class ConversationHistoryReader(IConversationManager conversations)
 {

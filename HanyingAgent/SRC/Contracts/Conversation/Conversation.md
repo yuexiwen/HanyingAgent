@@ -5,7 +5,7 @@
 定义实际交互历史的公共协议，按 SessionId 关联用户输入、Assistant 输出、工具调用和结果。
 
 当前已定义消息、类型化内容、追加和读取契约；纯文本本地 Manager、存储端口与内存实现已接入 Console，
-范围与约束见 [Runtime/Conversation](../../Runtime/Conversation/Conversation.md)。
+范围与约束见 [Capabilities/Conversation](../../Capabilities/Conversation/Conversation.md)。
 
 ## 直属子模块
 
@@ -20,7 +20,7 @@
 - SessionInfo 只携带轻量元数据，不包含不断增长的历史消息集合。
 - 记录可以关联 TaskId，但一个任务不等于一条消息。
 - 工具调用与结果需保留 Call ID 等结构，不能只保存显示文本。
-- 本目录不声明存储路径或具体数据库，也不实现访问授权；对应管理规划见 [Runtime/Conversation](../../Runtime/Conversation/Conversation.md)。
+- 本目录不声明存储路径或具体数据库，也不实现访问授权；对应管理规则见 [Capabilities/Conversation](../../Capabilities/Conversation/Conversation.md)。
 
 ConversationContent 不继承 ModelMessage：历史保存事实和结束信息，Context 再选择、转换为本轮模型消息。
 工具调用和 Observation 复用已有 Tools 类型；不把每轮动态系统提示、记忆摘要和 Skill 注入都追加成新聊天记录。

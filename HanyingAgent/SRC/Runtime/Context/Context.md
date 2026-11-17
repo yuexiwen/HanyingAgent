@@ -11,7 +11,7 @@
 ## 会话历史窗口
 
 [ConversationWindow](./ConversationWindow.cs) 在 Builder 之前选择并转换历史，不改变 Builder 的最终校验职责。
-由 DialogueCoordinator 提供已经记录的当前 User 消息及 Sequence；窗口不写记录、不调用模型。
+由 DialogueOrchestrator 提供已经记录的当前 User 消息及 Sequence；窗口不写记录、不调用模型。
 
 - 当前用户输入仅加入一次；只选择 Sequence 更早且属于该会话的消息，最终按时间顺序发送。
 - 正常片段要求相邻 User + 非空白、Stop、无工具调用的 Assistant；跨分页边界也能组成片段。
@@ -69,7 +69,7 @@ var invocation = await builder.BuildAsync(request, cancellationToken);
 
 需要记忆时由调用方先通过 memory.WriteAsync 写入；Builder 自身只读。
 该示例本身只组合 Context，不会调用模型；返回值是 ModelInvocation，不是模型回复。
-当前 Console 通过 DialogueCoordinator、ConversationWindow 和 DirectExecutor 接入此构建器，
+当前 Console 通过 DialogueOrchestrator、ConversationWindow 和 DirectExecutor 接入此构建器，
 传入空 MemoryOwners，不自动召回记忆。
 
 ## 输入字符上限
