@@ -11,14 +11,14 @@ using HanyingAgent.Runtime.Sessions;
 using HanyingAgent.Contracts.Tasks.Models;
 using Microsoft.Extensions.Logging;
 
-namespace HanyingAgent.Runtime.Conversation;
+namespace HanyingAgent.Runtime.Orchestration;
 
-public sealed class DialogueCoordinator(
+public sealed class DialogueOrchestrator(
     LocalSessionManager sessions,
     IConversationManager conversations,
     ConversationWindow window,
     DirectExecutor executor,
-    ILogger<DialogueCoordinator> logger)
+    ILogger<DialogueOrchestrator> logger)
 {
     public async Task<ExecutionOutcome> RespondAsync(
         DialogueRequest request, CancellationToken cancellationToken) =>

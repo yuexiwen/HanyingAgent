@@ -6,14 +6,14 @@ using HanyingAgent.Contracts.Tasks.Operations.Requests;
 using HanyingAgent.Contracts.Tasks.Operations.Responses;
 using HanyingAgent.Contracts.Users.Models;
 using HanyingAgent.Diagnostics;
-using HanyingAgent.Runtime.Conversation;
+using HanyingAgent.Runtime.Orchestration;
 using HanyingAgent.Runtime.Users;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using TaskStatus = HanyingAgent.Contracts.Tasks.Models.TaskStatus;
 
-namespace HanyingAgent.Runtime.Orchestration;
+namespace HanyingAgent.Runtime.Tasks;
 
 public sealed class LocalTaskManager(
     ITaskStore store,
@@ -165,7 +165,7 @@ public sealed class LocalTaskManager(
             LogTransition(store.StartTask(accepted.Id, handle.Owner, clock.GetUtcNow()));
             handle.Token.ThrowIfCancellationRequested();
             using var scope = scopeFactory.CreateScope();
-            var outcome = await scope.ServiceProvider.GetRequiredService<DialogueCoordinator>().RespondTaskAsync(
+            var outcome = await scope.ServiceProvider.GetRequiredService<DialogueOrchestrator>().RespondTaskAsync(
                 new DialogueRequest(accepted.SessionId, accepted.Input, options.SystemInstruction,
                     options.MaxInputCharacters, options.MaxHistoryTurns, options.ModelOptions),
                 accepted.Id,

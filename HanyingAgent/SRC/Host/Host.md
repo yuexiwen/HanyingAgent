@@ -80,4 +80,6 @@
 ## 设计边界
 
 显式命令不调用模型；Host 不拼接模型 Context、不执行记忆检索算法，也不推进 ReAct。
-Task 接受、会话占用、后台执行与收尾位于 Orchestration；Host 只发起操作和管理进程生命周期。
+Task 接受、会话占用、后台执行与收尾位于 [Tasks](../Runtime/Tasks/Tasks.md)；
+对话流程由 [Orchestration](../Runtime/Orchestration/Orchestration.md) 编排。
+Host 只发起操作和管理进程生命周期。

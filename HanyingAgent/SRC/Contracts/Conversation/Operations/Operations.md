@@ -29,7 +29,7 @@
 - 重试内容按类型和字段值比较，列表按顺序逐项比较，字符串使用 Ordinal，包括 ArgumentsJson 原文；不能使用集合引用相等代替内容比较。
 - 重复判断、调用关联校验、序号分配和新记录保存须并发安全协调，不能采用先查再无条件写入。
 - 对已提交消息的相同重试，具备记录访问权时可在 Session 关闭后返回原记录，但不允许追加新记录。
-- 不自动创建 Session 或 Task，不因追加而隐式恢复任务或修改 Task Version；相关业务状态由 Orchestration 协调。
+- 不自动创建 Session 或 Task，不因追加而隐式恢复任务或修改 Task Version；任务生命周期由 [Tasks](../../../Runtime/Tasks/Tasks.md) 管理。
 
 ## 读取与错误
 

@@ -1,6 +1,6 @@
 using HanyingAgent.Contracts.LanguageModels.Models;
 
-namespace HanyingAgent.Runtime.Orchestration;
+namespace HanyingAgent.Runtime.Tasks;
 
 public sealed record TaskExecutionOptions(
     string SystemInstruction,

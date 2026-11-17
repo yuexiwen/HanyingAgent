@@ -17,6 +17,7 @@ using HanyingAgent.Host;
 using HanyingAgent.Host.Configuration;
 using HanyingAgent.Runtime.Context;
 using HanyingAgent.Runtime.Conversation;
+using HanyingAgent.Runtime.Orchestration;
 using HanyingAgent.Runtime.Sessions;
 using HanyingAgent.Runtime.Users;
 using HanyingAgent.Tests.Support;
@@ -357,7 +358,7 @@ public sealed class DialogueTests
         var session = await fixture.NewSession();
         var wrapper = new FailingAssistantStore(fixture.Conversations);
         using var scope = fixture.Host.Services.CreateScope();
-        var coordinator = ActivatorUtilities.CreateInstance<DialogueCoordinator>(scope.ServiceProvider,
+        var coordinator = ActivatorUtilities.CreateInstance<DialogueOrchestrator>(scope.ServiceProvider,
             wrapper, new ConversationWindow(wrapper, Microsoft.Extensions.Logging.Abstractions.NullLogger<ConversationWindow>.Instance));
 
         await Assert.ThrowsAsync<IOException>(() => coordinator.RespondAsync(
@@ -507,7 +508,7 @@ public sealed class DialogueTests
         public async Task<ExecutionOutcome> Respond(SessionId id, string input, CancellationToken token = default)
         {
             using var scope = Host.Services.CreateScope();
-            return await scope.ServiceProvider.GetRequiredService<DialogueCoordinator>().RespondAsync(Request(id, input), token);
+            return await scope.ServiceProvider.GetRequiredService<DialogueOrchestrator>().RespondAsync(Request(id, input), token);
         }
 
         public DialogueRequest Request(SessionId id, string input)

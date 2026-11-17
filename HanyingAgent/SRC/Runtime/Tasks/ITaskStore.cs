@@ -3,7 +3,7 @@ using HanyingAgent.Contracts.Tasks.Operations.Requests;
 using HanyingAgent.Contracts.Tasks.Operations.Responses;
 using HanyingAgent.Contracts.Users.Models;
 
-namespace HanyingAgent.Runtime.Orchestration;
+namespace HanyingAgent.Runtime.Tasks;
 
 public interface ITaskStore
 {
