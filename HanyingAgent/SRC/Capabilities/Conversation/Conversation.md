@@ -7,7 +7,8 @@
 
 当前已实现 [LocalConversationManager](./LocalConversationManager.cs)、
 [IConversationStore](./IConversationStore.cs) 和 [ConversationHistoryReader](./ConversationHistoryReader.cs)；
-内存实现位于 [Persistence](../../Infrastructure/Persistence/InMemoryDialogueStore.cs)。
+内存实现位于 [InMemoryConversationStore](../../Infrastructure/Persistence/InMemoryConversationStore.cs)，
+仅实现 IConversationStore；与其他独立 Store 共用内部状态和锁，保持消息、会话和任务关联的一致性。
 
 ## 当前规则
 

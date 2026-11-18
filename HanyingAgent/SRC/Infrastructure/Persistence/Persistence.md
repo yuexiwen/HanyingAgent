@@ -24,20 +24,40 @@
 
 行为测试见 [InMemoryWorkingMemoryStoreTests](../../../TEST/HanyingAgent.Tests/WorkingMemory/InMemoryWorkingMemoryStoreTests.cs)。
 
-### 本地对话 Store
+### 独立的本地 Store
 
-[InMemoryDialogueStore](./InMemoryDialogueStore.cs) 实现 IUserStore、ISessionStore、IConversationStore、ITaskStore。
-四个端口共享短锁与集合，使用户存在性、会话归属、关闭检查、消息去重和 Sequence 分配在同一实例内原子执行。
+每个 Store 类实现一个存储接口，管理器直接注入所需接口；
+不再使用 InMemoryDialogueStore / InMemoryAgentStore 统一实现四个接口，也不增加组合转发入口：
+
+| 文件 | 职责 |
+|---|---|
+| [InMemoryUserStore.cs](./InMemoryUserStore.cs) | 仅实现 IUserStore，负责用户存储操作。 |
+| [InMemorySessionStore.cs](./InMemorySessionStore.cs) | 仅实现 ISessionStore，负责会话存储操作及独立对话 TurnLease。 |
+| [InMemoryConversationStore.cs](./InMemoryConversationStore.cs) | 仅实现 IConversationStore，负责消息保存、幂等比较、顺序及历史分页。 |
+| [InMemoryTaskStore.cs](./InMemoryTaskStore.cs) | 仅实现 ITaskStore，负责任务状态、结果及任务分页。 |
+| [InMemoryAgentState.cs](./InMemoryAgentState.cs) | 内部共享集合、同步锁及跨数据归属校验；不实现存储接口，不持有或转发 Store。 |
+
+DI 分别注册四个 Store 单例，通过工厂为它们注入同一个内部 InMemoryAgentState 单例。
+Store 的构造函数为 internal，由组合根创建，不对业务调用方暴露共享可变状态。
+不同 Host 容器拥有独立状态，不使用静态集合或全局锁。
+Store 之间不相互依赖；所有集合访问及校验都在共享 Gate 内完成。
+因此用户存在性、会话归属、关闭检查、消息去重和 Sequence 分配保持原有原子边界。
 Store 按管理器传入的可信 owner 验证归属；这些内部端口不是远程授权接口。
 关闭会话与 Session.Active 占用互斥；独立对话 lease 与正式任务使用同一状态，不提供跨进程锁。
 历史只追加，分页按 Sequence 定位，记录快照不随新消息改变。
 内存操作同步完成，不用 Task.Run 伪造异步 IO；锁内检查取消，已提交的操作不回滚。
 无容量淘汰与磁盘持久化；窗口淘汰的是发送给模型的历史，不删除 Store 记录。
 
-[任务存储实现](./InMemoryDialogueStore.Tasks.cs) 在同一短锁内创建 Task 并占用 Session，
+[任务存储实现](./InMemoryTaskStore.cs) 在同一短锁内创建 Task 并占用 Session，
 更新状态与 Version，以及提交终态结果并释放 Session。结果记录只写一次，迟到的旧任务收尾不释放新占用。
 任务按会话提交顺序分页，不依赖时钟或随机 ID 排序；消息追加校验 Task 与 Session 当前关联。
-锁内不调用模型、等待异步执行或触发取消回调。本地执行句柄和取消源由 Orchestration 管理。
+锁内不调用模型、等待异步执行或触发取消回调。本地执行句柄和取消源由 Runtime/Tasks 管理。
+这是独立实现类的职责拆分，不是独立事务或远程服务：
+任务操作仍需关联会话数据，消息追加仍需校验当前任务，相关数据在当前内存适配中属于同一一致性域。
+以后独立替换为数据库或远程存储时，需要重新落实跨数据事务或协调协议，不能为某个 Store 随意创建另一份状态。
+相关类图见 [TaskModel](../../../../.docs/ClassDiagram/TaskModel.md)。
+行为回归见 [TaskTests](../../../TEST/HanyingAgent.Tests/Tasks/TaskTests.cs)，
+包含跨 Store 占用与释放、并发关闭与提交，以及跨 Host 数据隔离。
 
 ## 后续组件规划
 
