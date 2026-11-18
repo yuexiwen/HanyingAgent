@@ -31,6 +31,43 @@ namespace HanyingAgent.Tests.Tasks;
 public sealed class TaskTests
 {
     [Fact]
+    public void SeparateStores_ShareAtomicSessionStateWithinHostButNotAcrossHosts()
+    {
+        using var host = ApplicationHost.CreateBuilder([]).Build();
+        using var otherHost = ApplicationHost.CreateBuilder([]).Build();
+        var users = host.Services.GetRequiredService<IUserStore>();
+        var sessions = host.Services.GetRequiredService<ISessionStore>();
+        var conversations = host.Services.GetRequiredService<IConversationStore>();
+        var tasks = host.Services.GetRequiredService<ITaskStore>();
+        var now = DateTimeOffset.UtcNow;
+        var user = users.Add("owner", now, CancellationToken.None);
+        var session = sessions.Add(user.Id, "session", now, CancellationToken.None);
+        var task = tasks.CreateTask(new SubmitTaskRequest(session.Id, "input"), user.Id, now, CancellationToken.None);
+
+        Assert.Equal(task.Id, sessions.Get(session.Id, user.Id, CancellationToken.None)!.CurrentTaskId);
+        Assert.Throws<InvalidOperationException>(() =>
+            sessions.Close(session.Id, user.Id, now, CancellationToken.None));
+        var message = conversations.Append(new AppendConversationMessageRequest(
+            new MessageId("message"), session.Id, task.Id, new UserConversationContent("input")),
+            user.Id, now, CancellationToken.None);
+        Assert.Equal(message, conversations.Get(message.Id, user.Id, CancellationToken.None));
+        Assert.Null(otherHost.Services.GetRequiredService<IUserStore>().Get(user.Id, CancellationToken.None));
+        Assert.Null(otherHost.Services.GetRequiredService<ISessionStore>().Get(session.Id, user.Id, CancellationToken.None));
+        Assert.Null(otherHost.Services.GetRequiredService<ITaskStore>().GetTask(task.Id, user.Id, CancellationToken.None));
+        Assert.Null(otherHost.Services.GetRequiredService<IConversationStore>().Get(message.Id, user.Id, CancellationToken.None));
+
+        var result = tasks.FinishTask(task.Id, user.Id, "answer", null, false, now);
+        Assert.Equal(result, tasks.GetTaskResult(task.Id, user.Id, CancellationToken.None));
+        var released = sessions.Get(session.Id, user.Id, CancellationToken.None)!;
+        Assert.Equal(SessionStatus.Idle, released.Status);
+        Assert.Null(released.CurrentTaskId);
+
+        var next = tasks.CreateTask(new SubmitTaskRequest(session.Id, "next"), user.Id, now, CancellationToken.None);
+        tasks.FinishTask(task.Id, user.Id, "late answer", null, false, now);
+        Assert.Equal(next.Id, sessions.Get(session.Id, user.Id, CancellationToken.None)!.CurrentTaskId);
+    }
+
+    [Fact]
     public async Task Submit_ReturnsAcceptedSnapshotAndOwnsSessionUntilHistoryAndResultAreSaved()
     {
         var entered = Signal();

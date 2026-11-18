@@ -5,7 +5,8 @@
 知道其他会话 ID 不会获得访问权。不存在的查询返回 null，写操作报错，名称不是身份键。
 
 [ISessionStore](./ISessionStore.cs) 是内部存储端口，内存实现见
-[InMemoryDialogueStore](../../Infrastructure/Persistence/InMemoryDialogueStore.cs)。
+[InMemorySessionStore](../../Infrastructure/Persistence/InMemorySessionStore.cs)。
+各 Store 独立实现接口，通过内部共享状态与锁协调会话占用，不通过统一封装类访问。
 会话不嵌入消息集合，通过 SessionId 读取独立 Conversation。
 
 正式任务接受时原子设置 Active 与 CurrentTaskId，任务结果保存时原子恢复 Idle 并清空关联；

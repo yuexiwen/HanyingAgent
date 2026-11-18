@@ -18,6 +18,11 @@ Tasks 调用 Orchestration 中的对话流程；对话流程不反向依赖 Task
 | [TaskExecutionOptions](./TaskExecutionOptions.cs) | 接收入口配置的不可变执行参数，不依赖 Host 配置类型。 |
 | 本地执行句柄 | 保存运行中的 Task、独立取消源与取消回调；收尾后移除并释放资源，不序列化。 |
 
+ITaskStore 的内存实现为 [InMemoryTaskStore](../../Infrastructure/Persistence/InMemoryTaskStore.cs)，
+仅实现任务存储接口，不依赖其他 Store 实例。它与会话、用户和历史存储共享内部状态及锁，
+以保持任务创建与会话占用、终态保存与会话释放的原子性；具体边界见
+[Persistence](../../Infrastructure/Persistence/Persistence.md)。
+
 ## 提交与执行
 
 Host 启动任务服务后才能接受提交；提交校验可信身份、输入与 Session，原子创建 Created 快照并设置

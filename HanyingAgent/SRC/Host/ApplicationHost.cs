@@ -93,11 +93,15 @@ public static class ApplicationHost
                 services.GetRequiredService<ILogger<OllamaLanguageModelRuntime>>());
         });
         builder.Services.AddTransient<DirectExecutor>();
-        builder.Services.AddSingleton<InMemoryDialogueStore>();
-        builder.Services.AddSingleton<IUserStore>(services => services.GetRequiredService<InMemoryDialogueStore>());
-        builder.Services.AddSingleton<ISessionStore>(services => services.GetRequiredService<InMemoryDialogueStore>());
-        builder.Services.AddSingleton<IConversationStore>(services => services.GetRequiredService<InMemoryDialogueStore>());
-        builder.Services.AddSingleton<ITaskStore>(services => services.GetRequiredService<InMemoryDialogueStore>());
+        builder.Services.AddSingleton(_ => new InMemoryAgentState());
+        builder.Services.AddSingleton<IUserStore>(services =>
+            new InMemoryUserStore(services.GetRequiredService<InMemoryAgentState>()));
+        builder.Services.AddSingleton<ISessionStore>(services =>
+            new InMemorySessionStore(services.GetRequiredService<InMemoryAgentState>()));
+        builder.Services.AddSingleton<IConversationStore>(services =>
+            new InMemoryConversationStore(services.GetRequiredService<InMemoryAgentState>()));
+        builder.Services.AddSingleton<ITaskStore>(services =>
+            new InMemoryTaskStore(services.GetRequiredService<InMemoryAgentState>()));
         builder.Services.AddSingleton<IUserManager, LocalUserManager>();
         builder.Services.AddSingleton<LocalUserContext>();
         builder.Services.AddSingleton<LocalSessionManager>();
