@@ -218,13 +218,13 @@ classDiagram
 
 ### Store 的实现分工
 
-| 文件 | 职责 |
-|---|---|
-| [InMemoryUserStore.cs](../../HanyingAgent/SRC/Infrastructure/Persistence/InMemoryUserStore.cs) | 仅实现 IUserStore。 |
-| [InMemorySessionStore.cs](../../HanyingAgent/SRC/Infrastructure/Persistence/InMemorySessionStore.cs) | 仅实现 ISessionStore，管理会话及 TurnLease。 |
-| [InMemoryConversationStore.cs](../../HanyingAgent/SRC/Infrastructure/Persistence/InMemoryConversationStore.cs) | 仅实现 IConversationStore，管理消息与历史分页。 |
-| [InMemoryTaskStore.cs](../../HanyingAgent/SRC/Infrastructure/Persistence/InMemoryTaskStore.cs) | 仅实现 ITaskStore，管理任务状态、结果及分页。 |
-| [InMemoryAgentState.cs](../../HanyingAgent/SRC/Infrastructure/Persistence/InMemoryAgentState.cs) | 内部共享集合、锁及归属校验，不实现任何 Store 接口。 |
+| 文件                                                                                                          | 职责                                                |
+| ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| [InMemoryUserStore.cs](../../HanyingAgent/SRC/Infrastructure/Persistence/InMemoryUserStore.cs)                 | 仅实现 IUserStore。                                 |
+| [InMemorySessionStore.cs](../../HanyingAgent/SRC/Infrastructure/Persistence/InMemorySessionStore.cs)           | 仅实现 ISessionStore，管理会话及 TurnLease。        |
+| [InMemoryConversationStore.cs](../../HanyingAgent/SRC/Infrastructure/Persistence/InMemoryConversationStore.cs) | 仅实现 IConversationStore，管理消息与历史分页。     |
+| [InMemoryTaskStore.cs](../../HanyingAgent/SRC/Infrastructure/Persistence/InMemoryTaskStore.cs)                 | 仅实现 ITaskStore，管理任务状态、结果及分页。       |
+| [InMemoryAgentState.cs](../../HanyingAgent/SRC/Infrastructure/Persistence/InMemoryAgentState.cs)               | 内部共享集合、锁及归属校验，不实现任何 Store 接口。 |
 
 这是四个独立 Store 类，不再使用 partial 或实现所有接口的组合类。
 管理器直接注入各自的存储接口，Store 之间不相互持有或调用。
