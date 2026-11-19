@@ -9,7 +9,7 @@
 WorkingMemory 已建立内部存储端口、正式 xUnit 测试项目、测试用可控时钟，并实现进程内存 Store 和工作记忆 Manager。
 当前已分别验证 Store 与 Manager 的独立行为，并增加真实组合的跨层边界与并发测试。
 五步现已完成，内存版 WorkingMemory MVP 此前已通过统一验收：252 个正式测试全部通过，构建 0 警告、0 错误。
-模块可供后续调用方通过公共接口使用，但未在程序入口接入记忆链路。
+Console 已通过 `/remember TEXT` 接入显式 User 级工作记忆写入，并在同一用户的后续对话中跨会话读取。
 数据不持久化，自动提取与评分、身份授权、容量治理和长期记忆仍未实现。
 
 Context 五步最小版已完成：接口、纯文本请求组装、明确归属的工作记忆接入、总输入字符上限和真实组件组合验收，
@@ -40,7 +40,10 @@ dotnet run --project .\HanyingAgent\HanyingAgent.csproj
 不支持退出后继续运行。所有数据只在本次进程内存在，重启不会恢复。
 入口统一使用 UTF-8 输入与输出，支持中文；通过管道输入时，发送端也需要使用 UTF-8。
 Windows PowerShell 5.1 的管道默认编码可能丢失中文，可先执行 `$OutputEncoding = [System.Text.UTF8Encoding]::new($false)`。
-每轮包含系统指令、选中的历史和一次当前输入，不自动读取或写入 WorkingMemory。
+每轮包含系统指令、当前用户最近最多 20 条有效工作记忆、选中的历史和一次当前输入。
+记忆仅通过 `/remember TEXT` 显式写入，不从对话自动提取；只保存非敏感编码偏好和技术约定，
+请勿输入个人信息或秘密。记忆随进程退出丢失；跨 Session 不等于跨进程持久化。
+总字符校验包含记忆和参考数据格式开销，超限明确失败，当前没有自动分配记忆与历史预算。
 默认最多携带最近 10 个正常完成问答片段；受字符预算限制时淘汰更早完整片段，但保留原始历史记录。
 截断、未知、拒绝、过滤和未回答的旧输入不进入后续模型上下文；最近最多扫描 200 条记录。
 系统指令与当前输入本身超限则明确失败，不截断当前问题。
@@ -59,6 +62,7 @@ Windows PowerShell 5.1 的管道默认编码可能丢失中文，可先执行 `$
 | `/history` | 查看最近一轮问答，User 与对应 Assistant 合算一轮。 |
 | `/history 数量` | 查看最近指定轮数，不足时显示全部，按时间顺序展示。 |
 | `/history all` | 查看全部历史问答。 |
+| `/remember 内容` | 保存当前用户的非敏感编码偏好或技术约定，后续同用户会话自动读取，仅在本进程有效。 |
 | `/tasks [游标]` | 当前会话的最近任务，默认 20 条，可向更早记录翻页。 |
 | `/task [完整TaskId]` | 查询状态、版本及已保存结果。 |
 | `/wait [完整TaskId]` | 等待结果；已展示的结果只显示状态，重看正文用 `/task`。 |
@@ -98,7 +102,8 @@ Agent 配置包括 SystemInstruction、MaxInputCharacters、MaxOutputTokens、Te
 字符上限与模型 Token 窗口独立；仅裁剪可选的旧历史，不自动估算 Token、生成摘要或预留输出空间。
 
 日志写入标准错误，交互与回答写入标准输出；任务流程关联 TaskId 和 SessionId，
-嵌套执行、Context 与模型日志同时携带 ExecutionId。
+Context 构造由编排器直接调用，使用 TaskId / SessionId 关联；
+后续执行器和模型日志额外携带 ExecutionId。
 默认不记录输入正文、系统指令、记忆正文或完整回复。日志级别可在 Logging:LogLevel 中设置。
 详细边界见 [Host](./SRC/Host/Host.md)、[Execution](./SRC/Runtime/Execution/Execution.md)
 和[日志说明](./SRC/Infrastructure/Observability/Observability.md)。

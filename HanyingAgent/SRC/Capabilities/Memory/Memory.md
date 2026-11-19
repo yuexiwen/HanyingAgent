@@ -8,7 +8,9 @@
 具体内存 Store 已在 [Infrastructure/Persistence](../../Infrastructure/Persistence/Persistence.md) 实现并配套独立测试。
 第一版仅实现工作记忆，范围、验收与后续能力见 [WorkingMemory 最小实现与演进计划](<../../../../.docs/disign/WorkingMemory 最小实现与演进计划.md>)；
 当前已完成五步：规则与测试基础、内存 Store、工作记忆 Manager、真实组合边界与并发测试、统一验收。
-内存版 WorkingMemory MVP 已验收，相关正式测试共 252 项通过；未接入 Agent 入口。
+内存版 WorkingMemory MVP 已验收，相关正式测试此前共 252 项通过。
+当前 Console 已通过 `/remember TEXT` 显式写入当前用户记忆，对话 Context 读取该用户的有效记忆。
+范围和限制见 [Console 用户记忆](../../Host/Console/Console.md)。
 
 ## 已有管理器
 
@@ -33,7 +35,7 @@
 
 ## 调用示例
 
-以下是后续入口组合和调用的示例，不表示当前 Program 已接入记忆链路：
+以下是独立组合和调用的示例；实际 Console 入口使用 User 归属，而不是 Global：
 
 ```csharp
 using HanyingAgent.Capabilities.Memory;

@@ -6,6 +6,7 @@ using HanyingAgent.Host.Console;
 using HanyingAgent.Capabilities.Conversation;
 using HanyingAgent.Runtime.Tasks;
 using HanyingAgent.Runtime.Users;
+using HanyingAgent.Contracts.Memory.Operations;
 using Microsoft.Extensions.Logging;
 
 namespace HanyingAgent.Host;
@@ -18,13 +19,14 @@ public sealed class ConsoleApplication(
     ILogger<ConsoleApplication> logger,
     TextReader input,
     TextWriter output,
-    ConsoleLogControl consoleLogs)
+    ConsoleLogControl consoleLogs,
+    IWorkingMemoryManager memory)
 {
     public async Task RunAsync(CancellationToken cancellationToken)
     {
         var state = new ConsoleState();
         var renderer = new ConsoleRenderer(output);
-        var commands = new ConsoleCommandHandler(tasks, sessions, history, state, renderer, consoleLogs);
+        var commands = new ConsoleCommandHandler(tasks, sessions, history, state, renderer, consoleLogs, memory);
         Task<string?>? read = null;
         using var notifications = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         await renderer.ShowHelpAsync();

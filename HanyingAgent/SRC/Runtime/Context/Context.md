@@ -19,22 +19,22 @@
 - 默认最多 10 个片段，可配置为 1–100；从近到远选取，达到字符预算时停止，不跳过超大新片段去拼更早内容。
 - UTF-16 预算包含系统指令、历史与当前输入；当前输入和系统指令必须完整保留，本身超限就失败。
 - 每页 20 条，最多扫描 200 条旧记录，防止连续失败导致无限翻页；达到任一上限就停止。
-- 最终 Builder 仍校验总长度；本链路传空 MemoryOwners，不借窗口预算隐式加入记忆。
+- 最终 Builder 仍校验包含记忆的总长度；对话编排器显式读取当前可信用户记忆并传入 Builder。
+  窗口尚未为记忆预留预算，总量超限明确失败，不静默丢弃记忆或截断当前输入。
 - 窗口淘汰不删除历史；离开窗口的事实可能忘记，字符预算也不能保证模型 Token 窗口。
 - 事件 2003 记录选中片段、扫描数、扫描中未选消息数和停止原因；
   不是未扫描的全部会话消息计数，不能把它解释为删除数量。
 
 ## 当前最小实现
 
-构造注入 IWorkingMemoryManager，调用方通过
+Builder 不依赖 Memory 或 Conversation 服务，调用方通过
 [BuildContextRequest](../../Contracts/Context/Operations/Requests/BuildContextRequest.cs) 提供：
-独立系统指令、按时间排列且包含当前 User 输入的消息序列、明确的 MemoryOwners，以及可选 ModelOptions。
+独立系统指令、按时间排列且包含当前 User 输入的消息序列、已读取的 Memories，以及可选 ModelOptions。
 
 ```text
 校验与快照化输入
   → 原始系统指令与消息字符数预检
-  → 按值去重 Owner
-  → 每个 Owner 读取最近 20 条工作记忆
+  → 校验已提供的记忆数据
   → 按 MemoryId 去重
   → UpdatedAt 降序、ID Ordinal 升序
   → System + 可选参考记忆 User 消息 + 原始消息
@@ -44,41 +44,47 @@
 
 - 原始序列只支持非空白 User 与纯文本 Assistant，并以当前 User 结尾；不再追加 Task.Input。
 - 明确拒绝原始序列内的 System、Tool、Assistant 工具调用或未知消息类型，不静默丢弃。
-- 不传记忆归属时不查记忆；不自动包含 User / Global，也不扩大 Session 到其下 Task。
-- 输入 Owner 与消息集合在第一次异步读取前物化；Assistant 的空工具列表独立快照化。
-- 依赖工作记忆管理器提供有效状态、到期过滤及精确归属结果，不重复实现其业务规则。
-- 检查依赖返回的基本归属与 ID 一致性；重复 ID 内容冲突时报错，不默默选取某份。
+- 不访问记忆服务；传空 Memories 时不增加参考消息或规则。
+- 输入记忆与消息集合快照化；Assistant 的空工具列表独立快照化。
+- 编排层负责选择可信 Owner，Memory Manager 负责有效状态和到期过滤；
+  编排器校验读取结果的归属，再把数据交给 Builder。
+- 检查记忆的 Owner、ID、Content、Source 基本有效性；重复 ID 内容冲突时报错，不默默选取某份。
 - 参考记忆单独作为 User 参考数据消息，正文为带标题的 JSON，保留 ID、Owner、Type、Content、Source。
 - 有记忆时向系统指令追加固定的参考资料使用规则，记忆正文不进入系统指令；无记忆时不加空资料块。
 - JSON 编码明确数据结构，但不保证模型绝不会服从参考文本中的恶意指令；身份授权与提示注入防护不在本阶段完成。
 - Options 原样传递，模型专属参数解释与 Provider JSON 适配仍属于模型模块。
-- 依赖异常或取消显式传播，无自动重试、记忆读取失败时的空结果回退或部分上下文成功返回。
+- 取消和校验失败显式传播，不返回部分上下文；构建无外部读取，可同步完成，保留 Task 返回契约。
 - 不读取 Conversation、不写记忆、不修改任务、不执行工具、不调用 LLM。
 
-本地 IWorkingMemoryManager 没有独立只读接口，因此构造时注入完整接口，但构建器只调用 ListRecentAsync；
-不为这一阶段另造与其重复的接口。独立测试与真实组合验证见 [Context 测试](../../../TEST/HanyingAgent.Tests/Context/Context.md)。
+记忆读取集中在 Orchestrator，ContextBuilder 只接受数据；
+独立测试不再需要 Memory 替身。真实组合验证由测试调用方先读取记忆再调用 Builder，
+见 [Context 测试](../../../TEST/HanyingAgent.Tests/Context/Context.md)。
 
-真实依赖的最小组合如下；request 由调用方提供，包含当前用户消息和明确归属：
+最小组合如下；调用方先完成可信 Owner 选择、授权和记忆读取：
 
 ```csharp
 var store = new InMemoryWorkingMemoryStore();
 IWorkingMemoryManager memory = new LocalWorkingMemoryManager(store, TimeProvider.System);
-IContextBuilder builder = new LocalContextBuilder(memory);
+var memories = await memory.ListRecentAsync(new MemoryReadRequest(owner, Limit: 20), cancellationToken);
+IContextBuilder builder = new LocalContextBuilder();
+var request = new BuildContextRequest(systemInstruction, messages, memories, options);
 var invocation = await builder.BuildAsync(request, cancellationToken);
 ```
 
-需要记忆时由调用方先通过 memory.WriteAsync 写入；Builder 自身只读。
+需要记忆时由调用方先通过 memory.WriteAsync 写入；Builder 不读写记忆服务。
 该示例本身只组合 Context，不会调用模型；返回值是 ModelInvocation，不是模型回复。
-当前 Console 通过 DialogueOrchestrator、ConversationWindow 和 DirectExecutor 接入此构建器，
-传入空 MemoryOwners，不自动召回记忆。
+当前 Console 通过 DialogueOrchestrator 接入此构建器：编排器调用 ConversationWindow、
+Memory Manager、ContextBuilder 和 DirectExecutor，显式读取当前用户最近最多 20 条有效工作记忆，
+传入上下文后取得 ModelInvocation，再交给执行器。
+不跨用户、不自动读取 Session / Task / Global 记忆；没有相关性检索或自动记忆提取。
 
 ## 输入字符上限
 
 构造参数 maxInputCharacters 默认 32,000，必须大于 0；入口可以按需要调整，无须修改公共请求协议：
 
 ```csharp
-var defaultBuilder = new LocalContextBuilder(memory);
-var customBuilder = new LocalContextBuilder(memory, maxInputCharacters: 16_000);
+var defaultBuilder = new LocalContextBuilder();
+var customBuilder = new LocalContextBuilder(maxInputCharacters: 16_000);
 ```
 
 - 按最终所有消息正文的 string.Length 累计，即 UTF-16 代码单元；不按 Unicode 字符、Token 或 UTF-8 字节计量。
@@ -87,12 +93,13 @@ var customBuilder = new LocalContextBuilder(memory, maxInputCharacters: 16_000);
 - 不计 role 等传输结构、空 Tools 或 Options；MaxOutputTokens 仍只是输出选项，不参与输入预算。
 - 刚好等于上限允许；超过时抛 InvalidOperationException，说明实际数值和配置上限，不包含请求正文。
 - 不自动裁剪、丢弃记忆或截断当前请求，不返回部分成功。非正上限在构造时抛 ArgumentOutOfRangeException。
-- 原始系统指令与消息已超限时，在读取记忆前失败；记忆读取后再检查完整输出，累计使用 long 避免 int 溢出。
+- 先检查原始系统指令与消息长度，再检查包含记忆的完整输出，累计使用 long 避免 int 溢出。
+  记忆读取已在编排器完成，Builder 不再控制外部读取时机。
 
 此限制约束可返回的消息正文总长度，不保证模型 Token 窗口、HTTP 请求大小或构建过程的内存峰值。
-Owner 数量、序列化前的记忆规模和输入集合物化仍无独立硬限制，不应把它当成处理任意不可控输入的完整资源治理。
+序列化前的记忆规模和输入集合物化仍无独立硬限制，不应把它当成处理任意不可控输入的完整资源治理。
 
-## 五步计划与当前状态
+## 五步最小版验收记录与后续调整
 
 | 步骤 | 内容 | 状态 |
 |---|---|---|
@@ -102,12 +109,14 @@ Owner 数量、序列化前的记忆规模和输入集合物化仍无独立硬�
 | 第四步 | 总输入字符上限、精确阈值及边界验证；不把字符数当成 Token 数。 | 已完成，默认 32,000，可在构造时调整。 |
 | 第五步 | 真实 Context + WorkingMemory Manager + Store 组合验收与统一文档收尾。 | 已完成，20 项真实组合测试及全套统一验收通过。 |
 
-当前独立测试 57 项通过，覆盖原有 40 项与新增 17 项字符边界用例；20 条仍只是每 Owner 的记忆数量限制，
+原五步最小版独立测试 57 项通过，覆盖原有 40 项与新增 17 项字符边界用例；20 条仍只是每 Owner 的记忆数量限制，
 字符上限约束最终正文总长度，并非精确 Token 预算或完整传输请求大小限制。
 另有 20 项真实组合测试通过，验证写入、更新、遗忘、状态及到期过滤、精确归属、每归属召回上限、跨归属排序和真实 JSON 字符边界。
 2026-11-09 统一验收：全项目 329 项测试通过、0 失败、0 跳过，其中 Context 共 77 项；
 解决方案构建 0 警告、0 错误，入口仍仅输出 HanyingAgent，应用 70 个编译项均不包含 TEST 源码。
 测试分组与复现命令见 [测试项目](../../../TEST/HanyingAgent.Tests/HanyingAgent.Tests.md)。
+2026-11-19 扁平化编排后，读取、归属校验、依赖错误及取消的测试移至编排边界，
+Builder 测试聚焦已提供数据的组装与预算；上述数量是历史验收记录，不是当前测试数量。
 会话链路已在 Builder 前实现最近历史选择与裁剪；Builder 本身不裁剪。
 未实现摘要、压缩、相关性评分、长期记忆、Skills 或工具历史。
 

@@ -19,7 +19,20 @@ Console 专属交互组件，不承担 Session / Task 的权威存储、业务�
 [ConversationHistoryReader](../../Capabilities/Conversation/ConversationHistoryReader.cs) 完成。
 `/history` 的数量解析属于命令适配，显示格式与未记录回复的提示属于渲染。
 
-## 终端美化
+## 用户记忆
+
+- `/remember TEXT` 将非敏感的编码偏好或技术约定写入当前可信用户的 User 级 WorkingMemory，
+  不需要选中会话，不创建业务 Task，也不写 Conversation。空白内容拒绝，写入失败或取消不显示成功。
+- 命令将内容标记为 Preference，Source 为 `console:/remember`，Confidence 为 1（显式用户提供，
+  不代表事实已验证），Importance 为 0.5；不自动设置到期时间，不做自动提取或分类。
+- 随后的对话自动读取同一用户最近最多 20 条有效记忆，跨会话可用，不读取其他用户、
+  Session 或 Task 的记忆；不会回头修改已经发出的模型请求。
+- 当前仅保存在进程内存中，退出后丢失。不是长期持久化；请勿输入个人信息、密钥或其他敏感内容。
+  提示不等于内容识别器，当前没有自动敏感信息检测。
+- 记忆作为不可信参考数据加入上下文，不作为系统指令。总字符上限仍严格校验，
+  加入记忆后超限会明确失败，不静默丢弃记忆或截断输入；尚未实现记忆与历史的自适应预算分配。
+
+## 终端展示
 
 使用 Spectre.Console 0.57.2。ConsoleRenderer 保留输出入口与纯文本分支，
 ConsolePresentation 只处理富终端绘制，不依赖任务或会话服务。

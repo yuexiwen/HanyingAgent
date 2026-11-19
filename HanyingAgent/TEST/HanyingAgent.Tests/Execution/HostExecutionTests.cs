@@ -5,11 +5,16 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
-using HanyingAgent.Contracts.Context.Operations.Requests;
+using HanyingAgent.Contracts.LanguageModels.Operations.Requests;
+using HanyingAgent.Contracts.Sessions.Operations;
+using HanyingAgent.Contracts.Sessions.Operations.Requests;
 using HanyingAgent.Contracts.Execution.Models;
 using HanyingAgent.Contracts.LanguageModels.Models;
 using HanyingAgent.Host;
 using HanyingAgent.Runtime.Execution;
+using HanyingAgent.Runtime.Context;
+using HanyingAgent.Runtime.Orchestration;
+using HanyingAgent.Runtime.Users;
 using HanyingAgent.Tests.Support;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -169,7 +174,7 @@ public sealed class HostExecutionTests
     }
 
     [Fact]
-    public async Task ConcurrentExecutions_HaveDistinctScopesSharedAcrossContextAndModelLogs()
+    public async Task ConcurrentDialogues_CorrelateFlatContextAndExecutionStagesBySession()
     {
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var handler = new RecordingHandler(async (index, token) =>
@@ -186,21 +191,27 @@ public sealed class HostExecutionTests
         using var firstScope = host.Services.CreateScope();
         using var secondScope = host.Services.CreateScope();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var user = await host.Services.GetRequiredService<LocalUserContext>().GetUserIdAsync(timeout.Token);
+        var sessions = host.Services.GetRequiredService<ISessionManager>();
+        var first = await sessions.CreateAsync(new CreateSessionRequest(user, "first"), timeout.Token);
+        var second = await sessions.CreateAsync(new CreateSessionRequest(user, "second"), timeout.Token);
 
         var results = await Task.WhenAll(
-            firstScope.ServiceProvider.GetRequiredService<DirectExecutor>().ExecuteAsync(Request(), timeout.Token),
-            secondScope.ServiceProvider.GetRequiredService<DirectExecutor>().ExecuteAsync(Request(), timeout.Token));
+            firstScope.ServiceProvider.GetRequiredService<DialogueOrchestrator>().RespondAsync(
+                new DialogueRequest(first.Id, "first", "system", 32_000, 10), timeout.Token),
+            secondScope.ServiceProvider.GetRequiredService<DialogueOrchestrator>().RespondAsync(
+                new DialogueRequest(second.Id, "second", "system", 32_000, 10), timeout.Token));
 
         Assert.All(results, result => Assert.Equal(ExecutionConclusion.Delivered, result.Conclusion));
-        var entries = logs.Entries.Where(entry => entry.Category.StartsWith("HanyingAgent.", StringComparison.Ordinal)).ToArray();
-        Assert.All(entries, entry => Assert.True(entry.Properties.ContainsKey("ExecutionId")));
-        var executions = entries.GroupBy(entry => entry.Properties["ExecutionId"]).ToArray();
+        var entries = logs.Entries.Where(entry => entry.EventId.Id is 2001 or 2002 or 1001 or 3001 or 3002 or 1002).ToArray();
+        Assert.All(entries, entry => Assert.True(entry.Properties.ContainsKey("SessionId")));
+        var executions = entries.GroupBy(entry => entry.Properties["SessionId"]).ToArray();
         Assert.Equal(2, executions.Length);
         foreach (var execution in executions)
         {
             Assert.Equal(
-                new (int, string?)[] { (1001, "ExecutionStarted"), (2001, "ContextBuildStarted"),
-                    (2002, "ContextBuildCompleted"), (3001, "ModelInvocationStarted"),
+                new (int, string?)[] { (2001, "ContextBuildStarted"), (2002, "ContextBuildCompleted"),
+                    (1001, "ExecutionStarted"), (3001, "ModelInvocationStarted"),
                     (3002, "ModelInvocationReturned"), (1002, "ExecutionReturned") },
                 execution.Select(entry => (entry.EventId.Id, entry.EventId.Name)));
             Assert.Contains(execution, entry => entry.Category.EndsWith(".DirectExecutor", StringComparison.Ordinal));
@@ -208,25 +219,34 @@ public sealed class HostExecutionTests
             Assert.Contains(execution, entry => entry.Category.EndsWith(".OllamaLanguageModelRuntime", StringComparison.Ordinal));
             Assert.Contains(execution, entry => entry.Properties.ContainsKey("InputCharacters"));
             Assert.Contains(execution, entry => entry.Properties.ContainsKey("InputTokens"));
+            var executionIds = execution.Where(entry => entry.Properties.ContainsKey("ExecutionId"))
+                .Select(entry => entry.Properties["ExecutionId"]).Distinct();
+            Assert.Single(executionIds);
         }
+        Assert.Equal(2, entries.Where(entry => entry.EventId.Id == 1001)
+            .Select(entry => entry.Properties["ExecutionId"]).Distinct().Count());
     }
 
     [Fact]
-    public async Task Execution_ContextLimitFailureDoesNotInvokeModelAndLogsFailureOnce()
+    public async Task Dialogue_ContextLimitFailureDoesNotInvokeExecutorAndLogsBuildContextPhaseOnce()
     {
         var handler = new RecordingHandler();
         var logs = new RecordingLoggerProvider();
         using var host = CreateHost(handler, logs, args: ["--Agent:MaxInputCharacters=4"]);
-        using var scope = host.Services.CreateScope();
-        var executor = scope.ServiceProvider.GetRequiredService<DirectExecutor>();
+        var user = await host.Services.GetRequiredService<LocalUserContext>().GetUserIdAsync(CancellationToken.None);
+        var session = await host.Services.GetRequiredService<ISessionManager>().CreateAsync(
+            new CreateSessionRequest(user, "test"), CancellationToken.None);
+        var orchestrator = host.Services.GetRequiredService<DialogueOrchestrator>();
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync(Request(), CancellationToken.None));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => orchestrator.RespondAsync(
+            new DialogueRequest(session.Id, "input", "system", 100, 10), CancellationToken.None));
 
         Assert.Empty(handler.Requests);
         var failure = Assert.Single(logs.Entries, entry => entry.Level == LogLevel.Error);
-        Assert.Equal(1003, failure.EventId.Id);
-        Assert.Equal("ExecutionFailed", failure.EventId.Name);
-        Assert.True(failure.Properties.ContainsKey("ExecutionId"));
+        Assert.Equal(4003, failure.EventId.Id);
+        Assert.Equal("DialogueFailed", failure.EventId.Name);
+        Assert.Equal("BuildContext", failure.Properties["Phase"]);
+        Assert.DoesNotContain(logs.Entries, entry => entry.EventId.Id == 1001);
         Assert.DoesNotContain(logs.Entries, entry => entry.Message.StartsWith("Execution returned", StringComparison.Ordinal));
     }
 
@@ -557,8 +577,8 @@ public sealed class HostExecutionTests
         return builder.Build();
     }
 
-    private static BuildContextRequest Request() => new(
-        "system", [new ModelUserMessage("private-input")], []);
+    private static ModelInvocation Request() => new(
+        [new ModelSystemMessage("system"), new ModelUserMessage("private-input")], []);
 
     private static HttpResponseMessage Response(string text = "private-answer", string reason = "stop") => new(HttpStatusCode.OK)
     {

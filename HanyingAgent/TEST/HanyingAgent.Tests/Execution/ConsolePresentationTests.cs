@@ -17,12 +17,12 @@ public sealed class ConsolePresentationTests
         using var output = new StringWriter();
         var renderer = rich ? RichRenderer(output) : new ConsoleRenderer(output);
         var state = new ConsoleState();
-        var handler = new ConsoleCommandHandler(null!, null!, null!, state, renderer, new ConsoleLogControl());
+        var handler = new ConsoleCommandHandler(null!, null!, null!, state, renderer, new ConsoleLogControl(), null!);
 
         await handler.HandleAsync(command, new HanyingAgent.Contracts.Users.Models.UserId("user"),
             CancellationToken.None, CancellationToken.None);
 
-        foreach (var name in new[] { "/help", "/logs", "/new", "/session", "/sessions", "/use", "/delete",
+        foreach (var name in new[] { "/help", "/logs", "/remember", "/new", "/session", "/sessions", "/use", "/delete",
             "/history", "/tasks", "/task", "/wait", "/cancel", "/close", "/exit" })
         {
             Assert.Contains(name, output.ToString());
@@ -37,7 +37,7 @@ public sealed class ConsolePresentationTests
     {
         using var output = new StringWriter();
         var handler = new ConsoleCommandHandler(null!, null!, null!, new ConsoleState(),
-            new ConsoleRenderer(output), new ConsoleLogControl());
+            new ConsoleRenderer(output), new ConsoleLogControl(), null!);
 
         await Assert.ThrowsAsync<ArgumentException>(() => handler.HandleAsync("/help extra",
             new HanyingAgent.Contracts.Users.Models.UserId("user"),
@@ -101,7 +101,7 @@ public sealed class ConsolePresentationTests
         await renderer.ShowHelpAsync();
         await renderer.ShowPromptAsync();
 
-        foreach (var command in new[] { "/help", "/logs", "/new", "/session", "/sessions", "/use", "/delete",
+        foreach (var command in new[] { "/help", "/logs", "/remember", "/new", "/session", "/sessions", "/use", "/delete",
             "/history", "/tasks", "/task", "/wait", "/cancel", "/close", "/exit" })
         {
             Assert.Contains(command, output.ToString());
