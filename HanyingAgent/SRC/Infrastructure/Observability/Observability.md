@@ -13,7 +13,9 @@
 - 执行器记录开始、返回及耗时；失败、主动取消、超时分别记录，未知结束原因不标记为任务完成。
 - 执行返回日志分别记录 Conclusion 与模型 FinishReason；Delivered 使用 Information，
   截断、未知、拒绝、过滤和不支持动作使用 Warning，不把模型返回误记为成功交付。
-- Context Builder 记录构建开始、最终消息数、记忆数、UTF-16 字符数和耗时。
+- Context Builder 记录构建开始、最终消息数、记忆数、UTF-16 字符数、输入 Token 估算与额度、
+  TokenCountIsEstimate、输出预留、历史份额、选中及省略历史轮数、记忆省略数和耗时。
+  候选因预算省略可观察，不记录正文，也不将估算当作 Provider 实际用量。
 - Ollama 适配器记录模型名、消息数、结束原因、Token 用量与耗时。
 - 两个现有组件新增可选 ILogger 参数，原构造方式仍可使用 NullLogger；DI 路径注入真实日志。
 - SimpleConsole 显示时间与 Scope，日志统一写入 stderr；stdout 保留交互与回答。
@@ -41,7 +43,7 @@
 | 1005 | ExecutionTimedOutOrDependencyCancelled | Warning：超时或依赖取消，调用方没有请求取消。 |
 | 2001 | ContextBuildStarted | Information：开始构建上下文。 |
 | 2002 | ContextBuildCompleted | Information：上下文构建完成。 |
-| 2003 | HistoryWindowSelected | Information：历史片段、扫描数量、字符数与停止原因。 |
+| 2003 | HistoryWindowSelected | Information：候选历史片段数 CandidateTurns、扫描数量与停止原因；最终预算选择见 2002。 |
 | 3001 | ModelInvocationStarted | Information：开始发送模型请求。 |
 | 3002 | ModelInvocationReturned | Information：模型响应解析通过，不代表执行策略正常交付。 |
 | 4001 | DialogueInputRecorded | Information：输入已记录，携带 MessageId 与 Sequence。 |

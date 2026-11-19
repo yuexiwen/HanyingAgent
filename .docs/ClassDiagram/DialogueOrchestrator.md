@@ -48,7 +48,7 @@ classDiagram
     }
 
     class ConversationWindow {
-        +SelectAsync(current, systemInstruction, maxCharacters, maxTurns) IReadOnlyList~ModelMessage~
+        +SelectAsync(current, maxTurns) IReadOnlyList~ModelMessage~
     }
 
     class DirectExecutor {
@@ -62,6 +62,7 @@ classDiagram
         +IReadOnlyList~ModelMessage~ Messages
         +IReadOnlyList~MemoryItem~ Memories
         +ModelOptions? Options
+        +int? MaxInputCharacters
     }
 
     class IContextBuilder {
@@ -153,10 +154,11 @@ classDiagram
 1. **校验请求**：检查请求和用户输入。
 2. **处理会话占用**：根据入口决定是否获取会话 lease。
 3. **保存用户消息**：调用 Conversation，保存输入并获得带序号的当前消息。
-4. **选择历史**：ConversationWindow 按字符预算和轮次限制选择历史，
+4. **读取候选历史**：ConversationWindow 按轮次和扫描数量限制读取历史，
    连同本次输入生成模型消息。
 5. **读取记忆**：解析可信用户，直接调用 Memory 读取最近最多 20 条有效 User 记忆，检查返回归属。
-6. **构造上下文**：直接调用 ContextBuilder，传入系统指令、消息、记忆及选项，得到 ModelInvocation。
+6. **构造上下文**：直接调用 ContextBuilder，传入系统指令、候选消息、记忆及选项，
+   统一管理模型预算，默认按 History 75% / Memory 25% 保留可选份额，允许借用空闲份额，得到 ModelInvocation。
 7. **执行模型请求**：调用可选的等待模型回调并检查取消；DirectExecutor 接收 ModelInvocation，
    调用 LanguageModelRuntime，再把响应解释为 ExecutionOutcome。
 8. **保存 Assistant 消息**：保存文本、结束原因等信息，然后返回 outcome。
@@ -170,8 +172,8 @@ classDiagram
 ## 四、当前设计边界
 
 - **TaskManager** 管业务任务生命周期；**DialogueOrchestrator** 管一次对话执行的步骤。
-- **Conversation** 保存消息；**ConversationWindow** 选择本次使用的历史；
-  **ContextBuilder** 构造模型调用上下文。
+- **Conversation** 保存消息；**ConversationWindow** 读取候选历史；
+  **ContextBuilder** 统一预算选择并构造模型调用上下文。
 - Memory、Context 和 Execution 是编排器直接协调的平级能力。
   ContextBuilder 不访问 Memory 服务，DirectExecutor 不构造 Context。
 - 当前没有语义召回、Skills 或工具执行循环。

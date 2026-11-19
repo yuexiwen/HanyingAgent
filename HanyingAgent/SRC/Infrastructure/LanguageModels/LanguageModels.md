@@ -79,9 +79,16 @@ Ollama 原生服务不因填写模型名称而获得访问保护，远程部署�
 
 当前不提供流式、工具调用、多模态、模型目录、自动拉取、认证配置框架或 Agent 循环。
 可选 ILogger 构造参数用于记录调用边界和用量，未传时保留无日志的独立使用方式。
-num_ctx 是运行配置，不是输入 Token 计数器；本适配器不估算 Token、不裁剪或压缩消息，
-也不能保证 Ollama 不按自身策略处理超长输入。Context 的 32,000 字符上限不保证请求能放入此窗口，
-仍需后续设计精确输入预算并预留输出空间。
+num_ctx 是运行配置，不是输入 Token 计数器；调用适配器不裁剪或压缩消息。
+独立的 [ConservativeModelTokenCounter](./ConservativeModelTokenCounter.cs) 实现
+[IModelTokenCounter](../../Contracts/LanguageModels/Operations/IModelTokenCounter.cs)，
+由 Host 配置相同的模型名称和窗口，供 Context 统一选择 History / Memory。
+当前估算按每 UTF-8 字节一个 Token，另加每消息 8、整个请求 8 的协议余量；
+预算还扣除配置的输出上限与默认 128 Token 安全空间。
+这不是模型 tokenizer，不保证任意模板都不会超限，也不伪装为 Provider 实际用量。
+未配置的模型覆盖明确拒绝。Context 在未指定 MaxOutputTokens 时补齐预算使用的默认值，
+确保最终请求的 num_predict 与输出预留一致。
+直接绕过 Context 调用适配器不会自动获得上述预算选择；精确计数需替换为匹配模型及聊天模板的实现。
 
 ## 设计边界
 

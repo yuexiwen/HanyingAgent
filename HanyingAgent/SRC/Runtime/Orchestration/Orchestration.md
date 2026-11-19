@@ -20,10 +20,10 @@ Conversation 提供历史读写，Context 负责模型历史选择和上下文�
 ```text
 Tasks 已持有任务占用（独立 RespondAsync 入口使用 Session.Active lease）
   → 保存本轮 User，取得 Sequence
-  → Context/ConversationWindow 选择该输入之前的历史，并只加入一次当前输入
+  → Context/ConversationWindow 读取该输入之前的候选完整历史，并只加入一次当前输入
   → 通过 LocalUserContext 解析可信用户
   → 调用 IWorkingMemoryManager，读取当前 User 最近最多 20 条有效记忆并校验返回归属
-  → 调用 IContextBuilder，传入消息、记忆数据和模型选项，取得 ModelInvocation
+  → 调用 IContextBuilder，传入候选消息、记忆、模型选项和字符保护上限，统一预算选择后取得 ModelInvocation
   → 调用阶段回调，由 Tasks 更新 WaitingForModel 状态
   → DirectExecutor 执行已构造的 ModelInvocation
   → 保存实际 Assistant 内容和结束原因
@@ -31,9 +31,10 @@ Tasks 已持有任务占用（独立 RespondAsync 入口使用 Session.Active le
 ```
 
 `/remember` 显式写入的 User 级记忆可跨会话读取；编排器负责协调 Memory 读取，
-Builder 只负责数据校验、去重排序、参考数据格式和最终长度校验，不依赖 Memory 服务。
+Builder 负责数据校验、去重排序、模型预算与份额选择、参考数据格式及最终校验，不依赖 Memory 服务。
 当前仍为进程内存存储，无自动提取或语义检索。
-历史窗口尚未预留记忆预算，总上下文超限时明确失败。
+可选上下文默认按 History 75% / Memory 25% 分配，可借用闲置额度；不会因历史增长而占用记忆保留份额。
+Token 计数当前为明确标记的估算。必需的系统指令和当前输入本身超限才因预算失败，不截断输入。
 
 阶段顺序为 SaveUser、SelectHistory、ReadMemory、BuildContext、WaitForModel、Execute、SaveAssistant。
 任一数据准备阶段失败或观察到取消，不继续调用模型；异常按所在阶段记录并原样向上传播。

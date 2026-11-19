@@ -13,7 +13,9 @@ Console 已通过 `/remember TEXT` 接入显式 User 级工作记忆写入，并
 数据不持久化，自动提取与评分、身份授权、容量治理和长期记忆仍未实现。
 
 Context 五步最小版已完成：接口、纯文本请求组装、明确归属的工作记忆接入、总输入字符上限和真实组件组合验收，
-共 57 项独立测试与 20 项真实组合测试通过。字符上限默认 32,000，可配置；精确 Token 预算仍未实现。
+共 57 项独立测试与 20 项真实组合测试通过（历史验收数量）。
+当前 Context 已统一管理历史与记忆预算，使用可替换的保守 Token 估算器，预留输出与安全空间；
+字符保护上限默认 32,000。匹配模型 tokenizer 的精确计数仍未实现。
 Context 阶段的历史统一验收：全项目 329 项测试通过、0 失败、0 跳过，解决方案构建 0 警告、0 错误。
 
 Ollama 适配器实现 ILanguageModelRuntime，使用 HttpClient 调用原生 /api/chat，支持纯文本非流式请求，
@@ -40,11 +42,14 @@ dotnet run --project .\HanyingAgent\HanyingAgent.csproj
 不支持退出后继续运行。所有数据只在本次进程内存在，重启不会恢复。
 入口统一使用 UTF-8 输入与输出，支持中文；通过管道输入时，发送端也需要使用 UTF-8。
 Windows PowerShell 5.1 的管道默认编码可能丢失中文，可先执行 `$OutputEncoding = [System.Text.UTF8Encoding]::new($false)`。
-每轮包含系统指令、当前用户最近最多 20 条有效工作记忆、选中的历史和一次当前输入。
+每轮从当前用户最近最多 20 条有效工作记忆及候选历史中，统一选择本次模型上下文；
+系统指令和当前输入必须完整保留。
 记忆仅通过 `/remember TEXT` 显式写入，不从对话自动提取；只保存非敏感编码偏好和技术约定，
 请勿输入个人信息或秘密。记忆随进程退出丢失；跨 Session 不等于跨进程持久化。
-总字符校验包含记忆和参考数据格式开销，超限明确失败，当前没有自动分配记忆与历史预算。
-默认最多携带最近 10 个正常完成问答片段；受字符预算限制时淘汰更早完整片段，但保留原始历史记录。
+Context 按模型窗口扣除输出与安全余量，剩余额度默认分配给 History 75% / Memory 25%，可借用闲置份额；
+计入记忆规则、标题、JSON 和消息协议估算开销，日志标记估算及省略数量。
+默认读取最近最多 10 个正常完成问答候选片段；最终受统一预算和字符保护上限约束，
+省略放不下的完整历史轮次或记忆条目，但不删除原始记录。
 截断、未知、拒绝、过滤和未回答的旧输入不进入后续模型上下文；最近最多扫描 200 条记录。
 系统指令与当前输入本身超限则明确失败，不截断当前问题。
 模型返回 Length、过滤、拒绝、工具调用或未知结束原因时明确显示状态，不伪装成完整回答。
@@ -97,9 +102,12 @@ dotnet run --project .\HanyingAgent\HanyingAgent.csproj -- --Ollama:TimeoutSecon
 ```
 
 Ollama 配置包括 BaseAddress、ModelName、ContextWindowTokens、TimeoutSeconds；
-Agent 配置包括 SystemInstruction、MaxInputCharacters、MaxOutputTokens、Temperature、MaxHistoryTurns（1–100，默认 10）。
+Agent 配置包括 SystemInstruction、MaxInputCharacters、MaxOutputTokens、Temperature、MaxHistoryTurns（1–100，默认 10）、
+HistoryBudgetPercent（1–99，默认 75）、TokenSafetyMargin（非负，默认 128）。
 非法配置在启动时失败。地址必须为末尾带 `/` 的 HTTP(S) URL，不含凭据、查询或片段。
-字符上限与模型 Token 窗口独立；仅裁剪可选的旧历史，不自动估算 Token、生成摘要或预留输出空间。
+Token 估算采用每 UTF-8 字节一个 Token，另加协议余量，并非精确 tokenizer，也不保证任意模型模板都不会超限。
+输出预留与安全余量之和必须小于配置的模型窗口；未指定输出上限时在最终请求补齐配置默认值。
+请求指定未配置预算的其他模型时明确拒绝；字符上限仍是独立的额外保护，不自动生成摘要。
 
 日志写入标准错误，交互与回答写入标准输出；任务流程关联 TaskId 和 SessionId，
 Context 构造由编排器直接调用，使用 TaskId / SessionId 关联；

@@ -16,6 +16,7 @@
 | [ModelOptions](./ModelOptions.cs) | 定义可选模型名称、Temperature 和最大输出 Token 数。 |
 | [ModelFinishReason](./ModelFinishReason.cs) | 区分停止、工具调用、长度限制、内容过滤、拒绝与未知原因。 |
 | [ModelUsage](./ModelUsage.cs) | 表达本次调用的可空输入和输出 Token 数，不用零伪装未知。 |
+| [ModelTokenBudget](./ModelTokenBudget.cs) | 表达配置模型的窗口、输出预留、安全余量和是否估算，计算可用输入额度；不是调用后的实际用量。 |
 
 ## 消息约定
 

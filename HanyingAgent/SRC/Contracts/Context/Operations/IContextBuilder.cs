@@ -6,7 +6,8 @@ namespace HanyingAgent.Contracts.Context.Operations;
 public interface IContextBuilder
 {
     /// <summary>
-    /// Builds a text-only invocation from trusted instructions, ordered messages and supplied memories.
+    /// Builds a budgeted text-only invocation from trusted instructions, candidate history and memories.
+    /// Preserves the current input and selects complete optional items under one model input budget.
     /// Validates and formats the supplied data without reading memory or conversation services,
     /// calling the model, or modifying conversation, task or memory state.
     /// </summary>

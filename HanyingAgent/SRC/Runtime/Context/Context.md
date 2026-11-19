@@ -3,46 +3,50 @@
 ## 功能与定位
 
 决定当前一次模型调用需要看到哪些信息，组装类型化 ModelInvocation。
-完整目标包括预算与工具协议；当前五步最小版已验收，支持纯文本消息、工作记忆与总输入字符上限，不保证 Token 预算。
+支持纯文本消息、工作记忆、统一的模型输入预算和总字符保护上限。
+当前 Token 计数为明确标识的保守估算，不是匹配模型 tokenizer 的精确计数。
 
 当前没有子目录，已有 [LocalContextBuilder](./LocalContextBuilder.cs)，实现
 [IContextBuilder](../../Contracts/Context/Operations/IContextBuilder.cs)。
 
 ## 会话历史窗口
 
-[ConversationWindow](./ConversationWindow.cs) 在 Builder 之前选择并转换历史，不改变 Builder 的最终校验职责。
+[ConversationWindow](./ConversationWindow.cs) 在 Builder 之前读取并转换候选历史，不分配输入预算。
 由 DialogueOrchestrator 提供已经记录的当前 User 消息及 Sequence；窗口不写记录、不调用模型。
 
 - 当前用户输入仅加入一次；只选择 Sequence 更早且属于该会话的消息，最终按时间顺序发送。
 - 正常片段要求相邻 User + 非空白、Stop、无工具调用的 Assistant；跨分页边界也能组成片段。
 - 截断、未知、拒绝、过滤、没有回答的旧输入不纳入；本期没有工具片段、摘要或语义召回。
-- 默认最多 10 个片段，可配置为 1–100；从近到远选取，达到字符预算时停止，不跳过超大新片段去拼更早内容。
-- UTF-16 预算包含系统指令、历史与当前输入；当前输入和系统指令必须完整保留，本身超限就失败。
+- 默认最多读取 10 个候选片段，可配置为 1–100；按时间正序交给 Builder。
 - 每页 20 条，最多扫描 200 条旧记录，防止连续失败导致无限翻页；达到任一上限就停止。
-- 最终 Builder 仍校验包含记忆的总长度；对话编排器显式读取当前可信用户记忆并传入 Builder。
-  窗口尚未为记忆预留预算，总量超限明确失败，不静默丢弃记忆或截断当前输入。
-- 窗口淘汰不删除历史；离开窗口的事实可能忘记，字符预算也不能保证模型 Token 窗口。
-- 事件 2003 记录选中片段、扫描数、扫描中未选消息数和停止原因；
+- 对话编排器显式读取当前可信用户记忆，再将两路候选一起传入 Builder，统一决定最终带入哪些内容。
+- 候选筛选或预算淘汰不删除历史；离开上下文的事实可能忘记。
+- 事件 2003 记录候选片段数 CandidateTurns、扫描数、扫描中未选消息数和停止原因；
+  最终选中和因预算省略的数量由 Builder 的事件 2002 记录。
   不是未扫描的全部会话消息计数，不能把它解释为删除数量。
 
 ## 当前最小实现
 
 Builder 不依赖 Memory 或 Conversation 服务，调用方通过
 [BuildContextRequest](../../Contracts/Context/Operations/Requests/BuildContextRequest.cs) 提供：
-独立系统指令、按时间排列且包含当前 User 输入的消息序列、已读取的 Memories，以及可选 ModelOptions。
+独立系统指令、按时间排列的完整候选问答轮次和最后的当前 User 输入、已读取的 Memories，
+以及可选 ModelOptions、请求级字符上限。
 
 ```text
 校验与快照化输入
-  → 原始系统指令与消息字符数预检
   → 校验已提供的记忆数据
   → 按 MemoryId 去重
   → UpdatedAt 降序、ID Ordinal 升序
-  → System + 可选参考记忆 User 消息 + 原始消息
-  → 最终全部消息正文字符数校验
+  → 解析目标模型预算，预留输出和安全余量
+  → 检查必须保留的 System 与当前输入
+  → 为 History / Memory 分配 75% / 25% 的可选预算
+  → 两路各自选取后借用未使用份额
+  → System + 可选参考记忆 User 消息 + 选中的完整历史轮次 + 当前输入
+  → 校验最终 Token 估算和字符总量，记录省略数量
   → ModelInvocation（Tools 为空）
 ```
 
-- 原始序列只支持非空白 User 与纯文本 Assistant，并以当前 User 结尾；不再追加 Task.Input。
+- 原始序列只支持完整的非空白 User + 纯文本 Assistant 问答轮次，并以当前 User 结尾；不再追加 Task.Input。
 - 明确拒绝原始序列内的 System、Tool、Assistant 工具调用或未知消息类型，不静默丢弃。
 - 不访问记忆服务；传空 Memories 时不增加参考消息或规则。
 - 输入记忆与消息集合快照化；Assistant 的空工具列表独立快照化。
@@ -52,12 +56,13 @@ Builder 不依赖 Memory 或 Conversation 服务，调用方通过
 - 参考记忆单独作为 User 参考数据消息，正文为带标题的 JSON，保留 ID、Owner、Type、Content、Source。
 - 有记忆时向系统指令追加固定的参考资料使用规则，记忆正文不进入系统指令；无记忆时不加空资料块。
 - JSON 编码明确数据结构，但不保证模型绝不会服从参考文本中的恶意指令；身份授权与提示注入防护不在本阶段完成。
-- Options 原样传递，模型专属参数解释与 Provider JSON 适配仍属于模型模块。
+- 显式 MaxOutputTokens 原样保留；未指定时补上预算所使用的默认输出上限，确保实际生成也受同一输出预留约束。
+  Provider JSON 适配仍属于模型模块。
 - 取消和校验失败显式传播，不返回部分上下文；构建无外部读取，可同步完成，保留 Task 返回契约。
 - 不读取 Conversation、不写记忆、不修改任务、不执行工具、不调用 LLM。
 
 记忆读取集中在 Orchestrator，ContextBuilder 只接受数据；
-独立测试不再需要 Memory 替身。真实组合验证由测试调用方先读取记忆再调用 Builder，
+独立测试不再需要 Memory 替身，通过可替换 Token Counter 验证预算。真实组合验证由测试调用方先读取记忆再调用 Builder，
 见 [Context 测试](../../../TEST/HanyingAgent.Tests/Context/Context.md)。
 
 最小组合如下；调用方先完成可信 Owner 选择、授权和记忆读取：
@@ -66,7 +71,8 @@ Builder 不依赖 Memory 或 Conversation 服务，调用方通过
 var store = new InMemoryWorkingMemoryStore();
 IWorkingMemoryManager memory = new LocalWorkingMemoryManager(store, TimeProvider.System);
 var memories = await memory.ListRecentAsync(new MemoryReadRequest(owner, Limit: 20), cancellationToken);
-IContextBuilder builder = new LocalContextBuilder();
+IModelTokenCounter tokens = new ConservativeModelTokenCounter("qwen2.5:1.5b", 4096, 256);
+IContextBuilder builder = new LocalContextBuilder(tokens);
 var request = new BuildContextRequest(systemInstruction, messages, memories, options);
 var invocation = await builder.BuildAsync(request, cancellationToken);
 ```
@@ -78,25 +84,35 @@ Memory Manager、ContextBuilder 和 DirectExecutor，显式读取当前用户最
 传入上下文后取得 ModelInvocation，再交给执行器。
 不跨用户、不自动读取 Session / Task / Global 记忆；没有相关性检索或自动记忆提取。
 
-## 输入字符上限
+## 统一预算与份额
 
-构造参数 maxInputCharacters 默认 32,000，必须大于 0；入口可以按需要调整，无须修改公共请求协议：
+输入 Token 额度 = 模型 ContextWindowTokens − MaxOutputTokens − TokenSafetyMargin。
+默认配置为 4096 − 256 − 128 = 3712；系统与当前输入先占用，剩余才是可选上下文额度。
 
-```csharp
-var defaultBuilder = new LocalContextBuilder();
-var customBuilder = new LocalContextBuilder(maxInputCharacters: 16_000);
-```
+- History 默认保留 75%，Memory 默认保留 25%；字符保护额度也按相同比例分配。
+  HistoryBudgetPercent 可配置为 1–99；份额不会随候选轮数增加而改变。
+- 先在各自份额内选择，再把闲置额度借给另一方；没有记忆时历史可使用全部剩余额度，反之亦然。
+  双方都有候选时也允许借用。借用阶段先尝试补充记忆，再扩展历史。
+- 历史从近到远取完整问答轮次，遇到放不下的轮次停止，不拆分或跳过它拼接更早历史。
+- 记忆按既定顺序逐条尝试；放不下的整条省略，可继续尝试后面的较小条目。
+  份额是预算保留，不保证任意大小的条目都能放入；极大记忆可能一条也选不中。
+- 每次试选计入完整消息、参考规则、标题、JSON 元数据及转义，并在最终组装后再次校验。
+- 省略只影响本次上下文，不删除 Store 数据，不截断用户输入或记忆正文。
+  日志记录选中历史轮数、记忆数、省略数、预算、输出预留和 TokenCountIsEstimate，不记录正文。
+- 必须保留的 System 与当前输入本身超限才明确失败；无效数据、协议、计数器错误仍明确传播，不通过省略隐藏。
 
-- 按最终所有消息正文的 string.Length 累计，即 UTF-16 代码单元；不按 Unicode 字符、Token 或 UTF-8 字节计量。
-- 包括原始系统指令、追加的换行和参考资料规则、参考记忆标题、完整序列化 JSON（含字段、元数据与转义），以及所有历史与当前 User / Assistant 正文。
-- 无记忆时不增加参考消息或规则，因此没有这部分开销；记忆按既有规则去重后再计量，所有归属共用一次总上限。
-- 不计 role 等传输结构、空 Tools 或 Options；MaxOutputTokens 仍只是输出选项，不参与输入预算。
-- 刚好等于上限允许；超过时抛 InvalidOperationException，说明实际数值和配置上限，不包含请求正文。
-- 不自动裁剪、丢弃记忆或截断当前请求，不返回部分成功。非正上限在构造时抛 ArgumentOutOfRangeException。
-- 先检查原始系统指令与消息长度，再检查包含记忆的完整输出，累计使用 long 避免 int 溢出。
-  记忆读取已在编排器完成，Builder 不再控制外部读取时机。
+Token 能力通过 [IModelTokenCounter](../../Contracts/LanguageModels/Operations/IModelTokenCounter.cs) 提供，
+由 Host 配置与模型适配器相同的模型名称和窗口大小。
+[ConservativeModelTokenCounter](../../Infrastructure/LanguageModels/ConservativeModelTokenCounter.cs)
+按每 UTF-8 字节估算一个 Token，另加每消息 8、整个请求 8 的协议余量，并预留默认 128 Token 安全空间。
+它不是精确 tokenizer，也不保证任意聊天模板都不会超限；日志明确标记估算。
+请求指定其他未配置模型时拒绝，不把默认模型窗口悄悄用于其他模型。
+后续可替换为匹配模型 tokenizer / 聊天模板的计数实现，无须修改候选选择流程。
 
-此限制约束可返回的消息正文总长度，不保证模型 Token 窗口、HTTP 请求大小或构建过程的内存峰值。
+maxInputCharacters 仍为额外的 UTF-16 正文保护上限，默认 32,000，必须大于 0。
+请求 MaxInputCharacters 可进一步收紧，不能放宽构造配置。它与 Token 额度同时约束选择，
+并非 Token 换算公式；计数使用 long。正文长度不包含传输 JSON 外围。
+预算不保证 HTTP 请求大小或构建过程的内存峰值。
 序列化前的记忆规模和输入集合物化仍无独立硬限制，不应把它当成处理任意不可控输入的完整资源治理。
 
 ## 五步最小版验收记录与后续调整
@@ -117,7 +133,8 @@ var customBuilder = new LocalContextBuilder(maxInputCharacters: 16_000);
 测试分组与复现命令见 [测试项目](../../../TEST/HanyingAgent.Tests/HanyingAgent.Tests.md)。
 2026-11-19 扁平化编排后，读取、归属校验、依赖错误及取消的测试移至编排边界，
 Builder 测试聚焦已提供数据的组装与预算；上述数量是历史验收记录，不是当前测试数量。
-会话链路已在 Builder 前实现最近历史选择与裁剪；Builder 本身不裁剪。
+2026-11-19 统一预算调整后，ConversationWindow 只读取候选历史，Builder 统一选择历史与记忆，
+并通过可替换计数器执行模型级估算预算与输出预留。
 未实现摘要、压缩、相关性评分、长期记忆、Skills 或工具历史。
 
 ## 后续组件规划（非本期已实现）

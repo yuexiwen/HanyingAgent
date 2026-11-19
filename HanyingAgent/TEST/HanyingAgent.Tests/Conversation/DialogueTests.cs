@@ -293,7 +293,7 @@ public sealed class DialogueTests
     }
 
     [Fact]
-    public async Task UserMemory_OverBudgetFailsBeforeModelInvocationAndReleasesSession()
+    public async Task UserMemory_OverBudgetIsOmittedWithoutFailingDialogueOrDeletingMemory()
     {
         var model = new ModelStub();
         using var fixture = new Fixture(model, "--Agent:MaxInputCharacters=128");
@@ -304,14 +304,46 @@ public sealed class DialogueTests
             new MemoryOwner(MemoryScope.User, userId: user),
             MemoryType.Preference, new string('x', 200), "test", 1, 0.5), CancellationToken.None);
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Respond(session.Id, "first"));
+        await fixture.Respond(session.Id, "first");
 
-        Assert.Contains("exceeding the configured limit", error.Message);
-        Assert.Empty(model.Invocations);
+        Assert.Equal(new[] { "system", "first" }, Texts(Assert.Single(model.Invocations)));
+        Assert.Equal(saved, Assert.Single(await memory.ListRecentAsync(new MemoryReadRequest(
+            new MemoryOwner(MemoryScope.User, userId: user)), CancellationToken.None)));
+        Assert.Contains(fixture.Logs.Entries, entry => entry.EventId.Id == 2002 &&
+            Equals(entry.Properties["OmittedMemories"], 1));
         Assert.Equal(SessionStatus.Idle, (await fixture.Sessions.GetAsync(session.Id, CancellationToken.None))!.Status);
         await memory.ForgetAsync(saved.Id, CancellationToken.None);
         await fixture.Respond(session.Id, "retry");
-        Assert.Single(model.Invocations);
+        Assert.Equal(2, model.Invocations.Count);
+    }
+
+    [Fact]
+    public async Task LongDialogue_PreservesMemoryWhileContextDropsOlderHistoryUnderModelTokenBudget()
+    {
+        var model = new ModelStub();
+        using var fixture = new Fixture(model, "--Agent:MaxHistoryTurns=100");
+        var session = await fixture.NewSession();
+        var user = await fixture.Identity.GetUserIdAsync(CancellationToken.None);
+        await fixture.Host.Services.GetRequiredService<IWorkingMemoryManager>().WriteAsync(new MemoryWriteRequest(
+            new MemoryOwner(MemoryScope.User, userId: user), MemoryType.Preference,
+            "Prefer focused methods.", "test", 1, 0.5), CancellationToken.None);
+        for (var index = 0; index < 15; index++)
+        {
+            await fixture.Respond(session.Id, $"{index} {new string('x', 400)}");
+        }
+
+        var counter = fixture.Host.Services.GetRequiredService<IModelTokenCounter>();
+        foreach (var invocation in model.Invocations)
+        {
+            Assert.Contains("Prefer focused methods.", Texts(invocation)[1]);
+            Assert.True(counter.CountInputTokens(invocation.Messages) <= counter.GetBudget(invocation.Options).MaxInputTokens);
+        }
+        var last = model.Invocations[^1];
+        Assert.True(last.Messages.Count > 3);
+        Assert.True(last.Messages.Count < 32);
+        Assert.Contains(fixture.Logs.Entries, entry => entry.EventId.Id == 2002 &&
+            entry.Properties["OmittedHistoryTurns"] is int omitted && omitted > 0 &&
+            Equals(entry.Properties["TokenCountIsEstimate"], true));
     }
 
     [Fact]

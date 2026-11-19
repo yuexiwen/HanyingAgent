@@ -95,8 +95,7 @@ public sealed class DialogueOrchestrator(
 
     private Task<IReadOnlyList<ModelMessage>> SelectHistoryAsync(
         ConversationMessage current, DialogueRequest request, CancellationToken cancellationToken) =>
-        window.SelectAsync(current, request.SystemInstruction,
-            request.MaxInputCharacters, request.MaxHistoryTurns, cancellationToken);
+        window.SelectAsync(current, request.MaxHistoryTurns, cancellationToken);
 
     private async Task<IReadOnlyList<MemoryItem>> ReadMemoryAsync(CancellationToken cancellationToken)
     {
@@ -116,7 +115,7 @@ public sealed class DialogueOrchestrator(
         IReadOnlyList<MemoryItem> memories, CancellationToken cancellationToken)
     {
         var invocation = await contextBuilder.BuildAsync(new BuildContextRequest(
-            request.SystemInstruction, messages, memories, request.Options), cancellationToken);
+            request.SystemInstruction, messages, memories, request.Options, request.MaxInputCharacters), cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         return invocation;
     }

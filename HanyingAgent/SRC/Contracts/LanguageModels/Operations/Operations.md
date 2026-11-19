@@ -9,6 +9,11 @@
 [ILanguageModelRuntime](./ILanguageModelRuntime.cs) 只有 InvokeAsync：
 接收 ModelInvocation 和 CancellationToken，等待本轮响应并返回非 null ModelResponse。
 
+[IModelTokenCounter](./IModelTokenCounter.cs) 独立于生成接口：
+GetBudget 根据模型选项解析窗口、输出预留与安全余量；CountInputTokens 对完整消息计数或估算（包含消息协议开销）。
+预算通过 IsEstimate 区分估算与精确计数，不把预算估算写入 Provider 实际 ModelUsage。
+Context 使用此能力选择候选数据，模型调用接口不负责历史或 Memory 的取舍。
+
 ## 直属子模块
 
 | 子模块 | 一句话概述 |
