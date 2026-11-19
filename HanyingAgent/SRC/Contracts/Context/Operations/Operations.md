@@ -12,15 +12,19 @@
 
 ## 操作约定
 
-- 只组装请求，不读取 Memory 或 Conversation，不调用 LLM、不执行工具，也不写入业务状态。
+- 统一管理模型输入预算、选择并组装候选内容，不读取 Memory 或 Conversation，不调用 LLM、不执行工具，也不写入业务状态。
 - 非法输入显式抛 ArgumentException / ArgumentNullException；不支持的协议抛 NotSupportedException。
 - 原始消息只允许非空白 User / 纯文本 Assistant，Assistant 的 ToolCalls 必须为非 null 空列表。
-- 消息序列至少有当前 User 输入，并以 User 结尾；不要求历史严格交替，不插入缺失轮次。
+- 消息序列由完整的 User / Assistant 历史轮次与最后的当前 User 构成；不插入缺失轮次。
 - System 消息须通过独立 SystemInstruction 提供，不允许嵌入原始消息序列。
 - 记忆由编排层读取和校验权限；Builder 检查必要字段，重复 ID 去重，冲突载荷明确拒绝，
   再按 UpdatedAt 降序、Id.Value Ordinal 升序排列。当前编排读取用户最近最多 20 条有效记忆。
-- 输出顺序为 System、可选的参考记忆 User 消息、原始消息；Tools 始终为空，Options 原样传递。
-- 本地实现按最终所有消息正文的 string.Length 校验构造配置的总字符上限，默认 32,000；等于允许，超过抛 InvalidOperationException，不裁剪或返回部分结果。
+- 输出顺序为 System、可选的参考记忆 User 消息、选中的完整历史轮次和当前输入；Tools 始终为空。
+  显式输出上限保留，未指定时补齐预算使用的默认 MaxOutputTokens。
+- 模型 Token 额度预留输出与安全空间后，剩余额度默认按 History 75% / Memory 25% 分配，可借用闲置份额。
+  候选超限时省略完整轮次或记忆条目并记录数量，不删除原数据。
+- 最终正文另受 UTF-16 字符上限约束，默认 32,000；请求可收紧。等于允许；
+  必需的系统指令与当前输入本身超限抛 InvalidOperationException，不截断或伪装成功。
 - 不支持工具结果或 Assistant 工具调用时明确拒绝，不丢弃协议片段或伪造成普通文字。
 - 取消显式传播，校验失败不返回部分上下文；没有需要 Builder 处理的记忆读取重试或降级。
 - 输入集合快照化，返回的消息集合不共享调用方可变容器；构建操作可同步完成，但保留 Task 返回契约。

@@ -71,14 +71,30 @@ public static class ApplicationHost
                 "Agent:Temperature must be finite and nonnegative.")
             .Validate(settings => settings.MaxHistoryTurns is > 0 and <= 100,
                 "Agent:MaxHistoryTurns must be between 1 and 100.")
+            .Validate(settings => settings.HistoryBudgetPercent is > 0 and < 100,
+                "Agent:HistoryBudgetPercent must be between 1 and 99.")
+            .Validate(settings => settings.TokenSafetyMargin >= 0,
+                "Agent:TokenSafetyMargin must be nonnegative.")
+            .Validate<IOptions<OllamaSettings>>((settings, model) =>
+                (long)settings.MaxOutputTokens + settings.TokenSafetyMargin < model.Value.ContextWindowTokens,
+                "Agent:MaxOutputTokens + Agent:TokenSafetyMargin must be smaller than Ollama:ContextWindowTokens.")
             .ValidateOnStart();
 
         builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
         builder.Services.AddSingleton<IWorkingMemoryStore, InMemoryWorkingMemoryStore>();
         builder.Services.AddSingleton<IWorkingMemoryManager, LocalWorkingMemoryManager>();
+        builder.Services.AddSingleton<IModelTokenCounter>(services =>
+        {
+            var model = services.GetRequiredService<IOptions<OllamaSettings>>().Value;
+            var agent = services.GetRequiredService<IOptions<AgentSettings>>().Value;
+            return new ConservativeModelTokenCounter(model.ModelName, model.ContextWindowTokens,
+                agent.MaxOutputTokens, agent.TokenSafetyMargin);
+        });
         builder.Services.AddSingleton<IContextBuilder>(services => new LocalContextBuilder(
+            services.GetRequiredService<IModelTokenCounter>(),
             services.GetRequiredService<IOptions<AgentSettings>>().Value.MaxInputCharacters,
-            services.GetRequiredService<ILogger<LocalContextBuilder>>()));
+            services.GetRequiredService<ILogger<LocalContextBuilder>>(),
+            services.GetRequiredService<IOptions<AgentSettings>>().Value.HistoryBudgetPercent));
         builder.Services.AddHttpClient("Ollama", (services, client) =>
         {
             var settings = services.GetRequiredService<IOptions<OllamaSettings>>().Value;

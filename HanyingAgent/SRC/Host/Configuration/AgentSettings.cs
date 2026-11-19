@@ -9,4 +9,6 @@ public sealed class AgentSettings
     public int MaxOutputTokens { get; set; } = 256;
     public double Temperature { get; set; } = 0.2;
     public int MaxHistoryTurns { get; set; } = 10;
+    public int HistoryBudgetPercent { get; set; } = 75;
+    public int TokenSafetyMargin { get; set; } = 128;
 }

@@ -22,16 +22,24 @@ Builder 不再注入 Memory 服务，不需要记忆替身。
 - ModelInvocation 和 BuildContextRequest 的 JSON 协议、必需字段及 role 判别符。
 - 预取消明确传播，不返回部分上下文；记忆读取期间取消与依赖失败由编排器测试覆盖。
 - 构造拒绝非正字符上限；默认 32,000 与自定义上限均验证上限前一字符、刚好等于及超出一字符。
-- 所有系统、历史和当前正文共用一个预算，Options、输出 Token 选项及传输 JSON 外围不计入。
+- 所有系统、历史、记忆和当前正文共用输入预算；输出 Token 上限从模型窗口预留，不计为输入正文。
 - 最终记忆计量包括追加规则、标题、元数据、完整 JSON 转义；多归属共用总上限，重复记忆只计一次。
-- 使用 UTF-16 长度，验证代理项、换行和累计超过 int.MaxValue 不溢出；大累计测试复用同一字符串，不分配数 GB 文本。
-- 原始输入或记忆加入后超限均明确失败，不修改请求或自动裁剪，失败后可重复调用。
+- 字符保护使用 UTF-16 长度，验证代理项、换行及大量候选历史的整体淘汰，不分配数 GB 文本。
+- 必需输入超限明确失败；候选记忆或历史超限整条省略，不修改请求和 Store，之后可重复调用。
+
+[UnifiedContextBudgetTests](./UnifiedContextBudgetTests.cs) 使用可替换的确定性 Token Counter 验证：
+
+- 模型窗口扣除输出预留与安全余量后的精确阈值；显式输出上限缩小输入额度，默认输出上限补齐到调用选项。
+- History / Memory 的 75% / 25% 保留份额不随历史增长变化，双方均可借用未使用份额，包括一方无候选时。
+- 整轮历史淘汰、不跳过超大新轮次拼旧历史、超大记忆省略后较小条目仍可进入。
+- 请求字符上限与 Token 预算同时生效，序列化参考数据和系统附加规则也消耗预算。
+- 真实保守估算器计入 UTF-8 字节与消息协议余量，并明确标识估算；未配置模型或无效输出预留拒绝。
 
 ## 真实组件组合测试
 
 [ContextBoundaryTests](./ContextBoundaryTests.cs) 直接组合 LocalContextBuilder、
 LocalWorkingMemoryManager 与 InMemoryWorkingMemoryStore；只替换时间源为已有 ManualTimeProvider，
-不以替身替代这三个被验收组件。测试调用方显式从 Manager 读取记忆后，将数据交给 Builder，
+不以替身替代这三个被验收组件；另注入确定性 Token Counter 以隔离字符边界。测试调用方显式从 Manager 读取记忆后，将数据交给 Builder，
 不再由 Builder 嵌套读取。每个测试独立构造状态，不依赖真实时间等待或执行顺序。
 
 | 验收点 | 用例数 | 证明的行为 |
@@ -41,14 +49,15 @@ LocalWorkingMemoryManager 与 InMemoryWorkingMemoryStore；只替换时间源为
 | 到期与恢复 | 5 | 当前时间严格早于到期时间才可引用；时间前进移除最后一条参考及系统附加规则；重新激活不能绕过到期，清除有效期可恢复。 |
 | 精确归属 | 2 | Task / Session / User / Global、不同及大小写不同 ID 不串归属；等值重复归属不重复引用，空归属不自动包含 Global。 |
 | 召回与排序 | 2 | 两个归属各有 25 条有效记忆时各取最近 20 条，更新更近的无效记忆不占名额；跨归属统一排序，同时间按 ID Ordinal 排列，更新后重新排序。 |
-| 最终字符边界 | 4 | 真实记忆 JSON、转义、系统规则、历史及当前正文参与计数；等于及少于上限允许，超出一字符失败；默认上限拒绝过大记忆且不自动裁剪，更新后可复用 Builder。 |
+| 最终字符边界 | 4 | 真实记忆 JSON、转义、系统规则、历史及当前正文参与计数；完整内容放不下时选择可放入的部分，整条省略超大记忆但保留 Store 数据，更新后可重新带入。 |
 | 取消 | 1 | 预取消明确传播且不修改存储，之后仍可正常构建。 |
 
 成功、超限及过滤操作同时检查存储记录，防止 Builder 在组装过程中修改或删除记忆；
 Builder 的构造依赖中已没有记忆接口。
 
 调用顺序、当前用户归属、读取失败、不合作依赖返回后的取消检查和模型调用隔离，
-见 [DialogueTests](../Conversation/DialogueTests.cs)。执行器测试验证直接接收 ModelInvocation。
+见 [DialogueTests](../Conversation/DialogueTests.cs)，其中多轮增长用例验证记忆不会被历史增长挤出预算。
+执行器测试验证直接接收 ModelInvocation。
 
 ## 统一验收与未完成范围
 

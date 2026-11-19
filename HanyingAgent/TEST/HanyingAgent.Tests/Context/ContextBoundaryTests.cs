@@ -27,7 +27,7 @@ public sealed class ContextBoundaryTests
     public ContextBoundaryTests()
     {
         _memory = new LocalWorkingMemoryManager(_store, _clock);
-        _builder = new LocalContextBuilder();
+        _builder = new LocalContextBuilder(new TestModelTokenCounter());
     }
 
     private static MemoryOwner Global => new(MemoryScope.Global);
@@ -290,16 +290,14 @@ public sealed class ContextBoundaryTests
         var originalRequest = JsonSerializer.Serialize(request);
         var baseline = await _builder.BuildAsync(request, CancellationToken.None);
         var total = CountCharacters(baseline);
-        var builder = new LocalContextBuilder(maxInputCharacters: total + allowance);
+        var builder = new LocalContextBuilder(new TestModelTokenCounter(), maxInputCharacters: total + allowance);
         Assert.True(total - 1 > request.SystemInstruction.Length + "previousanswercurrent".Length);
 
         if (allowance < 0)
         {
-            var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                builder.BuildAsync(request, CancellationToken.None));
-            Assert.Contains($"{total} UTF-16 code units", error.Message);
-            Assert.Contains($"limit of {total - 1}", error.Message);
-            Assert.DoesNotContain(item.Content, error.Message);
+            var reduced = await builder.BuildAsync(request, CancellationToken.None);
+            Assert.True(CountCharacters(reduced) <= total - 1);
+            Assert.Equal("current", Assert.IsType<ModelUserMessage>(reduced.Messages[^1]).Content);
         }
         else
         {
@@ -322,13 +320,12 @@ public sealed class ContextBoundaryTests
     }
 
     [Fact]
-    public async Task DefaultLimit_RejectsOversizedRealMemoryWithoutDiscardingItAndCanBeReusedAfterUpdate()
+    public async Task DefaultLimit_OmitsOversizedRealMemoryWithoutDeletingItAndCanBeReusedAfterUpdate()
     {
         var item = await WriteAsync(new string('x', LocalContextBuilder.DefaultMaxInputCharacters));
         var request = await Request(Global);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            _builder.BuildAsync(request, CancellationToken.None));
+        AssertPlain(await _builder.BuildAsync(request, CancellationToken.None));
 
         Assert.Equal(item, Assert.Single(await _store.ListByOwnerAsync(Global, CancellationToken.None)));
         Assert.Equal("current", Assert.IsType<ModelUserMessage>(Assert.Single(request.Messages)).Content);

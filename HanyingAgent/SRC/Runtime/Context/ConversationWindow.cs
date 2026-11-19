@@ -13,25 +13,15 @@ public sealed class ConversationWindow(IConversationManager conversations, ILogg
 
     public async Task<IReadOnlyList<ModelMessage>> SelectAsync(
         ConversationMessage current,
-        string systemInstruction,
-        int maxCharacters,
         int maxTurns,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(current);
-        ArgumentException.ThrowIfNullOrWhiteSpace(systemInstruction);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxCharacters);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxTurns);
         if (current.Content is not UserConversationContent user)
         {
             throw new ArgumentException("Current message must be a user input.", nameof(current));
         }
-        long characters = (long)systemInstruction.Length + user.Text.Length;
-        if (characters > maxCharacters)
-        {
-            throw new InvalidOperationException("System instruction and current input exceed the character budget.");
-        }
-
         var selected = new List<ModelMessage> { new ModelUserMessage(user.Text) };
         AssistantConversationContent? pending = null;
         string? cursor = null;
@@ -53,16 +43,8 @@ public sealed class ConversationWindow(IConversationManager conversations, ILogg
                 scanned++;
                 if (message.Content is UserConversationContent previousUser && pending is not null)
                 {
-                    var pairCharacters = (long)previousUser.Text.Length + pending.Text!.Length;
-                    if (characters + pairCharacters > maxCharacters)
-                    {
-                        reason = "CharacterBudget";
-                        stop = true;
-                        break;
-                    }
                     selected.InsertRange(0,
                         [new ModelUserMessage(previousUser.Text), new ModelAssistantMessage(pending.Text, [])]);
-                    characters += pairCharacters;
                     turns++;
                     pending = null;
                     if (turns == maxTurns)
@@ -89,9 +71,9 @@ public sealed class ConversationWindow(IConversationManager conversations, ILogg
         } while (!stop && cursor is not null);
 
         logger.LogInformation(LogEvents.HistoryWindowSelected,
-            "History window selected: {SelectedTurns} turns, {ScannedMessages} scanned, {OmittedMessages} omitted, " +
-            "{InputCharacters} characters; {SelectionReason}",
-            turns, scanned, scanned - turns * 2, characters, reason);
+            "History candidates loaded: {CandidateTurns} turns, {ScannedMessages} scanned, {OmittedMessages} omitted; " +
+            "{SelectionReason}. Context owns final budget selection.",
+            turns, scanned, scanned - turns * 2, reason);
         return selected.ToArray();
     }
 }

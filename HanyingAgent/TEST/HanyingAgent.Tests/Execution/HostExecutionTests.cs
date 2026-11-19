@@ -109,6 +109,11 @@ public sealed class HostExecutionTests
     [InlineData("Agent:SystemInstruction", " ")]
     [InlineData("Agent:MaxInputCharacters", "0")]
     [InlineData("Agent:MaxOutputTokens", "0")]
+    [InlineData("Agent:MaxOutputTokens", "4096")]
+    [InlineData("Agent:TokenSafetyMargin", "-1")]
+    [InlineData("Agent:TokenSafetyMargin", "4096")]
+    [InlineData("Agent:HistoryBudgetPercent", "0")]
+    [InlineData("Agent:HistoryBudgetPercent", "100")]
     [InlineData("Agent:Temperature", "-1")]
     [InlineData("Agent:Temperature", "NaN")]
     public async Task Startup_RejectsInvalidConfigurationBeforeReadingInput(string key, string value)
