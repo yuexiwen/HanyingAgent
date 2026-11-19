@@ -21,8 +21,9 @@
 - 不记录请求正文、记忆内容、系统指令或完整回复。已知异常只在执行边界记录一次，Console 提示不重复打印堆栈。
 
 对话协调建立真实 SessionId Scope，内部 DirectExecutor 再嵌套 ExecutionId。
-历史选择和记录事件携带 SessionId，执行、Context 与模型事件同时携带两者。
-正式任务路径继承 LocalTaskManager 的 TaskId Scope，执行、Context 与模型事件同时携带三个 ID；
+历史选择、Context 构造和记录事件携带 SessionId，执行与模型事件同时携带 ExecutionId。
+正式任务路径继承 LocalTaskManager 的 TaskId Scope；Context 携带 TaskId / SessionId，
+执行与模型事件同时携带三个 ID。Context 已由编排器直接调用，先于执行器开始；
 独立对话入口不伪造 TaskId。Scope 是日志关联，不是分布式 Trace。
 文件滚动、Activity / OpenTelemetry、指标和事件总线仍未实现。没有将日志作为对话、任务状态或恢复依据。
 
@@ -45,7 +46,7 @@
 | 3002 | ModelInvocationReturned | Information：模型响应解析通过，不代表执行策略正常交付。 |
 | 4001 | DialogueInputRecorded | Information：输入已记录，携带 MessageId 与 Sequence。 |
 | 4002 | DialogueResponseRecorded | Information：实际回复已记录，携带结论与顺序。 |
-| 4003 | DialogueFailed | Error：会话访问、历史选择或记录失败，注明阶段，不自动重试。 |
+| 4003 | DialogueFailed | Error：会话访问、历史选择、记忆读取、Context 构造或记录失败，注明阶段，不自动重试。 |
 | 4004 | DialogueCancelled | Information：非模型执行阶段观察到取消。 |
 | 4005 | SessionCommandFailed | Warning：会话命令或没有当前会话时的操作失败。 |
 | 4006 | DialogueResponseNotRecorded | Warning：不支持的动作没有伪装成普通文本历史。 |

@@ -33,6 +33,7 @@ internal sealed class ConsolePresentation(IAnsiConsole console)
             ("/use INDEX|ID", "Switch session"),
             ("/delete INDEX", "Hide session; retain data and running tasks"),
             ("/history [COUNT|all]", "View conversation history"),
+            ("/remember TEXT", "Remember a non-sensitive coding preference for this user"),
             ("/tasks [CURSOR]", "List tasks"),
             ("/task [ID]", "Inspect a task"),
             ("/wait [ID]", "Wait for a task result"),
@@ -45,6 +46,7 @@ internal sealed class ConsolePresentation(IAnsiConsole console)
         }
         console.Write(table);
         Line("Task commands default to the last submitted task.", Color.Grey);
+        Line("User memories apply across sessions until process exit. Do not enter personal data or secrets.", Color.Grey);
     }
 
     public void Line(string text, Color? color = null) =>

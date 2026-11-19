@@ -1,4 +1,7 @@
 using System.Text.Json;
+using HanyingAgent.Contracts.Context.Operations;
+using HanyingAgent.Contracts.Context.Operations.Requests;
+using HanyingAgent.Contracts.Tasks.Operations.Requests;
 using HanyingAgent.Contracts.Conversation.Models;
 using HanyingAgent.Contracts.Conversation.Operations;
 using HanyingAgent.Contracts.Conversation.Operations.Requests;
@@ -15,11 +18,17 @@ using HanyingAgent.Contracts.Users.Operations;
 using HanyingAgent.Contracts.Users.Operations.Requests;
 using HanyingAgent.Host;
 using HanyingAgent.Host.Configuration;
+using HanyingAgent.Host.Console;
+using HanyingAgent.Contracts.Memory.Models;
+using HanyingAgent.Contracts.Memory.Operations;
+using HanyingAgent.Contracts.Memory.Operations.Requests;
+using HanyingAgent.Contracts.Users.Models;
 using HanyingAgent.Runtime.Context;
 using HanyingAgent.Capabilities.Conversation;
 using HanyingAgent.Runtime.Orchestration;
 using HanyingAgent.Runtime.Sessions;
 using HanyingAgent.Runtime.Users;
+using HanyingAgent.Runtime.Tasks;
 using HanyingAgent.Tests.Support;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -30,6 +39,281 @@ namespace HanyingAgent.Tests.Conversation;
 
 public sealed class DialogueTests
 {
+    [Fact]
+    public async Task Orchestrator_CallsHistoryMemoryContextAndExecutorInOrder()
+    {
+        var stages = new List<string>();
+        var model = new ModelStub((_, _) =>
+        {
+            stages.Add("model");
+            return Task.FromResult(new ModelResponse("answer", [], ModelFinishReason.Stop));
+        });
+        var memory = new RecordingMemory();
+        var context = new RecordingContext();
+        using var fixture = new Fixture(model, services =>
+        {
+            services.AddSingleton<IWorkingMemoryManager>(memory);
+            services.AddSingleton<IContextBuilder>(context);
+        });
+        var session = await fixture.NewSession();
+        var user = await fixture.Identity.GetUserIdAsync(CancellationToken.None);
+        var owner = new MemoryOwner(MemoryScope.User, userId: user);
+        var now = DateTimeOffset.UtcNow;
+        var tasks = fixture.Host.Services.GetRequiredService<ITaskStore>();
+        var accepted = tasks.CreateTask(new SubmitTaskRequest(session.Id, "question"), user, now, CancellationToken.None);
+        tasks.StartTask(accepted.Id, user, now);
+        var item = new MemoryItem(new MemoryId("memory"), owner, MemoryType.Preference,
+            "Prefer focused methods.", "test", 1, 0.5, MemoryStatus.Active, now, now, null);
+        using var cancellation = new CancellationTokenSource();
+        memory.Read = async (request, token) =>
+        {
+            stages.Add("memory");
+            Assert.Equal(owner, request.Owner);
+            Assert.Equal(20, request.Limit);
+            Assert.Equal(cancellation.Token, token);
+            Assert.Contains(fixture.Logs.Entries, entry => entry.EventId.Id == 2003);
+            var input = Assert.Single((await fixture.Read(session.Id)).Items);
+            Assert.Equal("question", Assert.IsType<UserConversationContent>(input.Content).Text);
+            return [item];
+        };
+        var invocation = new ModelInvocation([new ModelUserMessage("assembled context")], []);
+        context.Build = (request, token) =>
+        {
+            stages.Add("context");
+            Assert.Equal(item, Assert.Single(request.Memories));
+            Assert.Equal("question", Assert.IsType<ModelUserMessage>(Assert.Single(request.Messages)).Content);
+            Assert.Equal("system", request.SystemInstruction);
+            Assert.Equal(cancellation.Token, token);
+            return Task.FromResult(invocation);
+        };
+
+        await fixture.Host.Services.GetRequiredService<DialogueOrchestrator>().RespondTaskAsync(
+            fixture.Request(session.Id, "question"), accepted.Id, () =>
+            {
+                stages.Add("waiting");
+                tasks.WaitForModel(accepted.Id, user, now);
+            }, cancellation.Token);
+
+        Assert.Equal(new[] { "memory", "context", "waiting", "model" }, stages);
+        Assert.Same(invocation, Assert.Single(model.Invocations));
+        Assert.Equal(2, (await fixture.Read(session.Id)).Items.Count);
+    }
+
+    [Theory]
+    [InlineData("memory", false)]
+    [InlineData("memory", true)]
+    [InlineData("context", false)]
+    [InlineData("context", true)]
+    public async Task Orchestrator_DependencyFailureStopsLaterStagesAndPreservesOriginalException(string stage, bool cancelled)
+    {
+        using var cancellation = new CancellationTokenSource();
+        Exception expected = cancelled
+            ? new OperationCanceledException(cancellation.Token)
+            : new IOException("Dependency unavailable.");
+        var memory = new RecordingMemory();
+        var context = new RecordingContext();
+        if (stage == "memory")
+        {
+            memory.Read = (_, _) => Task.FromException<IReadOnlyList<MemoryItem>>(expected);
+        }
+        else
+        {
+            context.Build = (_, _) => Task.FromException<ModelInvocation>(expected);
+        }
+        var model = new ModelStub();
+        using var fixture = new Fixture(model, services =>
+        {
+            services.AddSingleton<IWorkingMemoryManager>(memory);
+            services.AddSingleton<IContextBuilder>(context);
+        });
+        var session = await fixture.NewSession();
+
+        var actual = await Record.ExceptionAsync(() => fixture.Respond(session.Id, "question", cancellation.Token));
+
+        Assert.Same(expected, actual);
+        Assert.Equal(1, memory.Calls);
+        Assert.Equal(stage == "memory" ? 0 : 1, context.Calls);
+        Assert.Empty(model.Invocations);
+        Assert.DoesNotContain(fixture.Logs.Entries, entry => entry.EventId.Id == 1001);
+        var failure = Assert.Single(fixture.Logs.Entries, entry => entry.EventId.Id == (cancelled ? 4004 : 4003));
+        Assert.Equal(stage == "memory" ? "ReadMemory" : "BuildContext", failure.Properties["Phase"]);
+        Assert.Equal(SessionStatus.Idle, (await fixture.Sessions.GetAsync(session.Id, CancellationToken.None))!.Status);
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("null-item")]
+    [InlineData("foreign-owner")]
+    public async Task Orchestrator_RejectsInvalidMemoryBeforePassingItToContext(string kind)
+    {
+        var memory = new RecordingMemory();
+        var context = new RecordingContext();
+        var model = new ModelStub();
+        using var fixture = new Fixture(model, services =>
+        {
+            services.AddSingleton<IWorkingMemoryManager>(memory);
+            services.AddSingleton<IContextBuilder>(context);
+        });
+        var session = await fixture.NewSession();
+        var now = DateTimeOffset.UtcNow;
+        var foreign = new MemoryItem(new MemoryId("foreign"),
+            new MemoryOwner(MemoryScope.User, userId: new UserId("other")),
+            MemoryType.Preference, "foreign", "test", 1, 0.5, MemoryStatus.Active, now, now, null);
+        memory.Read = (_, _) => Task.FromResult<IReadOnlyList<MemoryItem>>(kind switch
+        {
+            "null" => null!,
+            "null-item" => [null!],
+            _ => [foreign]
+        });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Respond(session.Id, "question"));
+
+        Assert.Equal(0, context.Calls);
+        Assert.Empty(model.Invocations);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Orchestrator_CancellationAfterDependencyReturnsPreventsNextStage(bool duringMemory)
+    {
+        using var cancellation = new CancellationTokenSource();
+        var memory = new RecordingMemory();
+        var context = new RecordingContext();
+        if (duringMemory)
+        {
+            memory.Read = (_, _) =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult<IReadOnlyList<MemoryItem>>([]);
+            };
+        }
+        else
+        {
+            context.Build = (_, _) =>
+            {
+                cancellation.Cancel();
+                return Task.FromResult(new ModelInvocation([new ModelUserMessage("context")], []));
+            };
+        }
+        var model = new ModelStub();
+        using var fixture = new Fixture(model, services =>
+        {
+            services.AddSingleton<IWorkingMemoryManager>(memory);
+            services.AddSingleton<IContextBuilder>(context);
+        });
+        var session = await fixture.NewSession();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            fixture.Respond(session.Id, "question", cancellation.Token));
+
+        Assert.Equal(duringMemory ? 0 : 1, context.Calls);
+        Assert.Empty(model.Invocations);
+    }
+
+    [Fact]
+    public async Task Console_RememberIncludesUserMemoryAcrossSessionsWithoutAddingConversationMessages()
+    {
+        var model = new ModelStub();
+        using var fixture = new Fixture(model);
+        var memory = fixture.Host.Services.GetRequiredService<IWorkingMemoryManager>();
+        await memory.WriteAsync(new MemoryWriteRequest(
+            new MemoryOwner(MemoryScope.User, userId: new UserId("other-user")),
+            MemoryType.Preference, "foreign-user-memory", "test", 1, 0.5), CancellationToken.None);
+        var unrelatedSession = await fixture.NewSession("Unrelated");
+        await memory.WriteAsync(new MemoryWriteRequest(
+            new MemoryOwner(MemoryScope.Session, sessionId: unrelatedSession.Id),
+            MemoryType.Fact, "session-only-memory", "test", 1, 0.5), CancellationToken.None);
+        using var input = new StringReader(
+            "/remember Prefer small focused methods.\nfirst\n/wait\n/new Next\nsecond\n/wait\n/exit\n");
+        using var output = new StringWriter();
+        var console = ActivatorUtilities.CreateInstance<ConsoleApplication>(fixture.Host.Services, input, output);
+        await fixture.Host.StartAsync();
+        try
+        {
+            await console.RunAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        finally
+        {
+            await fixture.Host.StopAsync();
+        }
+
+        Assert.Contains("User memory saved:", output.ToString());
+        Assert.Equal(2, model.Invocations.Count);
+        foreach (var invocation in model.Invocations)
+        {
+            var texts = Texts(invocation);
+            Assert.Contains("untrusted supporting context", texts[0]);
+            Assert.Contains("Prefer small focused methods.", texts[1]);
+            Assert.DoesNotContain("foreign-user-memory", string.Join("\n", texts));
+            Assert.DoesNotContain("session-only-memory", string.Join("\n", texts));
+        }
+        Assert.Equal("first", Texts(model.Invocations[0])[^1]);
+        Assert.Equal("second", Texts(model.Invocations[1])[^1]);
+        foreach (var session in (await fixture.Sessions.ListAsync(CancellationToken.None))
+            .Where(session => session.Id != unrelatedSession.Id))
+        {
+            var messages = (await fixture.Read(session.Id)).Items;
+            Assert.Equal(2, messages.Count);
+            Assert.DoesNotContain(messages, message => message.Content is UserConversationContent user &&
+                user.Text.Contains("Prefer small focused methods.", StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
+    public async Task Remember_RequiresNoSessionAndRejectsEmptyOrCancelledWritesWithoutSuccessOutput()
+    {
+        using var fixture = new Fixture(new ModelStub());
+        var memory = fixture.Host.Services.GetRequiredService<IWorkingMemoryManager>();
+        var user = await fixture.Identity.GetUserIdAsync(CancellationToken.None);
+        var state = new ConsoleState();
+        using var output = new StringWriter();
+        var handler = new ConsoleCommandHandler(null!, null!, null!, state,
+            new ConsoleRenderer(output), new ConsoleLogControl(), memory);
+
+        await Assert.ThrowsAnyAsync<ArgumentException>(() =>
+            handler.HandleAsync("/remember   ", user, CancellationToken.None, CancellationToken.None));
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            handler.HandleAsync("/remember Use explicit types.", user, CancellationToken.None, cancellation.Token));
+        Assert.Equal("", output.ToString());
+        Assert.Empty(await memory.ListRecentAsync(new MemoryReadRequest(
+            new MemoryOwner(MemoryScope.User, userId: user)), CancellationToken.None));
+
+        await handler.HandleAsync(" /REMEMBER Use explicit types. ", user,
+            CancellationToken.None, CancellationToken.None);
+
+        var saved = Assert.Single(await memory.ListRecentAsync(new MemoryReadRequest(
+            new MemoryOwner(MemoryScope.User, userId: user)), CancellationToken.None));
+        Assert.Equal("Use explicit types.", saved.Content);
+        Assert.Contains("User memory saved:", output.ToString());
+        Assert.Null(state.Current);
+        Assert.Empty(state.Pending);
+    }
+
+    [Fact]
+    public async Task UserMemory_OverBudgetFailsBeforeModelInvocationAndReleasesSession()
+    {
+        var model = new ModelStub();
+        using var fixture = new Fixture(model, "--Agent:MaxInputCharacters=128");
+        var session = await fixture.NewSession();
+        var user = await fixture.Identity.GetUserIdAsync(CancellationToken.None);
+        var memory = fixture.Host.Services.GetRequiredService<IWorkingMemoryManager>();
+        var saved = await memory.WriteAsync(new MemoryWriteRequest(
+            new MemoryOwner(MemoryScope.User, userId: user),
+            MemoryType.Preference, new string('x', 200), "test", 1, 0.5), CancellationToken.None);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => fixture.Respond(session.Id, "first"));
+
+        Assert.Contains("exceeding the configured limit", error.Message);
+        Assert.Empty(model.Invocations);
+        Assert.Equal(SessionStatus.Idle, (await fixture.Sessions.GetAsync(session.Id, CancellationToken.None))!.Status);
+        await memory.ForgetAsync(saved.Id, CancellationToken.None);
+        await fixture.Respond(session.Id, "retry");
+        Assert.Single(model.Invocations);
+    }
+
     [Fact]
     public async Task Dialogue_IncludesPreviousTurnOnceAndIsolatesOtherSessions()
     {
@@ -485,12 +769,15 @@ public sealed class DialogueTests
         public ISessionManager Sessions => Host.Services.GetRequiredService<ISessionManager>();
         public LocalUserContext Identity => Host.Services.GetRequiredService<LocalUserContext>();
 
-        public Fixture(ModelStub model, params string[] args)
+        public Fixture(ModelStub model, params string[] args) : this(model, _ => { }, args) { }
+
+        public Fixture(ModelStub model, Action<IServiceCollection> configure, params string[] args)
         {
             var builder = ApplicationHost.CreateBuilder(["--Agent:SystemInstruction=system", .. args]);
             builder.Logging.ClearProviders();
             builder.Logging.AddProvider(Logs);
             builder.Services.AddSingleton<ILanguageModelRuntime>(model);
+            configure(builder.Services);
             Host = builder.Build();
         }
 
@@ -532,6 +819,41 @@ public sealed class DialogueTests
             return respond is null
                 ? Task.FromResult(new ModelResponse("answer", [], ModelFinishReason.Stop))
                 : respond(Invocations.Count, cancellationToken);
+        }
+    }
+
+    private sealed class RecordingMemory : IWorkingMemoryManager
+    {
+        public int Calls { get; private set; }
+        public Func<MemoryReadRequest, CancellationToken, Task<IReadOnlyList<MemoryItem>>> Read { get; set; } =
+            (_, _) => Task.FromResult<IReadOnlyList<MemoryItem>>([]);
+
+        public Task<IReadOnlyList<MemoryItem>> ListRecentAsync(MemoryReadRequest request, CancellationToken cancellationToken)
+        {
+            Calls++;
+            return Read(request, cancellationToken);
+        }
+
+        public Task<MemoryItem> WriteAsync(MemoryWriteRequest request, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<MemoryItem> UpdateAsync(MemoryId id, MemoryUpdateRequest request, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task ForgetAsync(MemoryId id, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class RecordingContext : IContextBuilder
+    {
+        public int Calls { get; private set; }
+        public Func<BuildContextRequest, CancellationToken, Task<ModelInvocation>> Build { get; set; } =
+            (_, _) => Task.FromResult(new ModelInvocation([new ModelUserMessage("context")], []));
+
+        public Task<ModelInvocation> BuildAsync(BuildContextRequest request, CancellationToken cancellationToken)
+        {
+            Calls++;
+            return Build(request, cancellationToken);
         }
     }
 

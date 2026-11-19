@@ -5,6 +5,9 @@ using HanyingAgent.Contracts.Sessions.Operations.Requests;
 using HanyingAgent.Contracts.Tasks.Models;
 using HanyingAgent.Contracts.Tasks.Operations.Requests;
 using HanyingAgent.Contracts.Users.Models;
+using HanyingAgent.Contracts.Memory.Models;
+using HanyingAgent.Contracts.Memory.Operations;
+using HanyingAgent.Contracts.Memory.Operations.Requests;
 using HanyingAgent.Capabilities.Conversation;
 using HanyingAgent.Runtime.Tasks;
 
@@ -16,7 +19,8 @@ internal sealed class ConsoleCommandHandler(
     ConversationHistoryReader history,
     ConsoleState state,
     ConsoleRenderer renderer,
-    ConsoleLogControl consoleLogs)
+    ConsoleLogControl consoleLogs,
+    IWorkingMemoryManager memory)
 {
     public async Task HandleAsync(
         string line, UserId userId, CancellationToken notificationToken, CancellationToken token)
@@ -37,6 +41,14 @@ internal sealed class ConsoleCommandHandler(
         {
             case "/help" when argument is null:
                 await renderer.ShowHelpAsync();
+                break;
+            case "/remember":
+                ArgumentException.ThrowIfNullOrWhiteSpace(argument);
+                var remembered = await memory.WriteAsync(new MemoryWriteRequest(
+                    new MemoryOwner(MemoryScope.User, userId: userId),
+                    MemoryType.Preference, argument, "console:/remember", 1, 0.5), token);
+                await renderer.WriteLineAsync(
+                    $"User memory saved: {remembered.Id.Value}. Available across this user's sessions until process exit.");
                 break;
             case "/logs":
                 if (argument is not null)

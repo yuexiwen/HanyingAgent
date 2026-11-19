@@ -77,7 +77,6 @@ public static class ApplicationHost
         builder.Services.AddSingleton<IWorkingMemoryStore, InMemoryWorkingMemoryStore>();
         builder.Services.AddSingleton<IWorkingMemoryManager, LocalWorkingMemoryManager>();
         builder.Services.AddSingleton<IContextBuilder>(services => new LocalContextBuilder(
-            services.GetRequiredService<IWorkingMemoryManager>(),
             services.GetRequiredService<IOptions<AgentSettings>>().Value.MaxInputCharacters,
             services.GetRequiredService<ILogger<LocalContextBuilder>>()));
         builder.Services.AddHttpClient("Ollama", (services, client) =>

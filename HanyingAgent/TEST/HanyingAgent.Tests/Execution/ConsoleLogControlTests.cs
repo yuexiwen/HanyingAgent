@@ -19,7 +19,7 @@ public sealed class ConsoleLogControlTests
         using var output = new StringWriter();
         var control = new ConsoleLogControl();
         var renderer = new ConsoleRenderer(output);
-        var handler = new ConsoleCommandHandler(null!, null!, null!, new ConsoleState(), renderer, control);
+        var handler = new ConsoleCommandHandler(null!, null!, null!, new ConsoleState(), renderer, control, null!);
 
         await handler.HandleAsync(command, new UserId("user"), CancellationToken.None, CancellationToken.None);
         await renderer.WriteLineAsync("[Task failed.]");
@@ -37,7 +37,7 @@ public sealed class ConsoleLogControlTests
         using var output = new StringWriter();
         var control = new ConsoleLogControl();
         var handler = new ConsoleCommandHandler(null!, null!, null!, new ConsoleState(),
-            new ConsoleRenderer(output), control);
+            new ConsoleRenderer(output), control, null!);
 
         await Assert.ThrowsAsync<ArgumentException>(() => handler.HandleAsync(
             command, new UserId("user"), CancellationToken.None, CancellationToken.None));

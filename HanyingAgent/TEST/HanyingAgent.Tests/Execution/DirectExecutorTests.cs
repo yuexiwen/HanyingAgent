@@ -33,11 +33,10 @@ public sealed class DirectExecutorTests
         ModelFinishReason reason, string? text, ExecutionConclusion expected)
     {
         var response = new ModelResponse(text, [], reason, new ModelUsage(12, 3), "provider-reason");
-        var context = new StubContext();
         var model = new StubModel((_, _) => Task.FromResult(response));
         using var logs = new RecordingLoggerProvider();
         using var factory = LoggerFactory.Create(builder => builder.AddProvider(logs));
-        var executor = new DirectExecutor(context, model, factory.CreateLogger<DirectExecutor>());
+        var executor = new DirectExecutor(model, factory.CreateLogger<DirectExecutor>());
         var request = Request();
         using var cancellation = new CancellationTokenSource();
 
@@ -48,9 +47,7 @@ public sealed class DirectExecutorTests
         Assert.Equal(reason, outcome.FinishReason);
         Assert.Same(response.Usage, outcome.Usage);
         Assert.Equal(response.ProviderFinishReason, outcome.ProviderFinishReason);
-        Assert.Same(request, context.Request);
-        Assert.Same(context.Invocation, model.Invocation);
-        Assert.Equal(cancellation.Token, context.Token);
+        Assert.Same(request, model.Invocation);
         Assert.Equal(cancellation.Token, model.Token);
         Assert.Equal(1, model.Calls);
         var returned = Assert.Single(logs.Entries,
@@ -71,7 +68,7 @@ public sealed class DirectExecutorTests
             "not a completed action",
             [new ToolCallRequest(new ToolCallId("call-1"), "weather", "{}")],
             reason)));
-        var executor = CreateExecutor(new StubContext(), model);
+        var executor = CreateExecutor(model);
 
         var outcome = await executor.ExecuteAsync(Request(), CancellationToken.None);
 
@@ -99,7 +96,7 @@ public sealed class DirectExecutorTests
         var model = new StubModel((_, _) => Task.FromResult(response));
         using var logs = new RecordingLoggerProvider();
         using var factory = LoggerFactory.Create(builder => builder.AddProvider(logs));
-        var executor = new DirectExecutor(new StubContext(), model, factory.CreateLogger<DirectExecutor>());
+        var executor = new DirectExecutor(model, factory.CreateLogger<DirectExecutor>());
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync(Request(), CancellationToken.None));
 
@@ -110,7 +107,6 @@ public sealed class DirectExecutorTests
     }
 
     [Theory]
-    [InlineData("context")]
     [InlineData("model")]
     [InlineData("timeout")]
     public async Task ExecuteAsync_PropagatesOriginalDependencyFailureWithoutRetry(string stage)
@@ -118,38 +114,37 @@ public sealed class DirectExecutorTests
         Exception failure = stage == "timeout"
             ? new OperationCanceledException("dependency timeout")
             : new HttpRequestException("dependency unavailable");
-        var context = new StubContext { Failure = stage == "context" ? failure : null };
         var model = new StubModel((_, _) => Task.FromException<ModelResponse>(failure));
-        var executor = CreateExecutor(context, model);
+        var executor = CreateExecutor(model);
 
         var actual = await Assert.ThrowsAnyAsync<Exception>(() =>
             executor.ExecuteAsync(Request(), CancellationToken.None));
 
         Assert.Same(failure, actual);
-        Assert.Equal(stage == "context" ? 0 : 1, model.Calls);
+        Assert.Equal(1, model.Calls);
     }
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task ExecuteAsync_CancellationWinsEvenIfDependencyReturnsNormally(bool duringContext)
+    public async Task ExecuteAsync_CancellationBeforeInvocationOrAfterModelReturnsStopsExecution(bool beforeInvocation)
     {
         using var cancellation = new CancellationTokenSource();
-        var context = new StubContext
+        if (beforeInvocation)
         {
-            BeforeReturn = duringContext ? cancellation.Cancel : null
-        };
+            cancellation.Cancel();
+        }
         var model = new StubModel((_, _) =>
         {
             cancellation.Cancel();
             return Task.FromResult(new ModelResponse("answer", [], ModelFinishReason.Stop));
         });
-        var executor = CreateExecutor(context, model);
+        var executor = CreateExecutor(model);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             executor.ExecuteAsync(Request(), cancellation.Token));
 
-        Assert.Equal(duringContext ? 0 : 1, model.Calls);
+        Assert.Equal(beforeInvocation ? 0 : 1, model.Calls);
     }
 
     [Theory]
@@ -185,26 +180,18 @@ public sealed class DirectExecutorTests
         }
     }
 
-    private static DirectExecutor CreateExecutor(IContextBuilder context, ILanguageModelRuntime model) =>
-        new(context, model, Microsoft.Extensions.Logging.Abstractions.NullLogger<DirectExecutor>.Instance);
+    private static DirectExecutor CreateExecutor(ILanguageModelRuntime model) =>
+        new(model, Microsoft.Extensions.Logging.Abstractions.NullLogger<DirectExecutor>.Instance);
 
-    private static BuildContextRequest Request() => new("system", [new ModelUserMessage("input")], []);
+    private static ModelInvocation Request() =>
+        new([new ModelSystemMessage("system"), new ModelUserMessage("input")], []);
 
     private sealed class StubContext : IContextBuilder
     {
         public ModelInvocation Invocation { get; } = new([new ModelUserMessage("assembled")], []);
-        public BuildContextRequest? Request { get; private set; }
-        public CancellationToken Token { get; private set; }
-        public Exception? Failure { get; init; }
-        public Action? BeforeReturn { get; init; }
 
-        public Task<ModelInvocation> BuildAsync(BuildContextRequest request, CancellationToken cancellationToken)
-        {
-            Request = request;
-            Token = cancellationToken;
-            BeforeReturn?.Invoke();
-            return Failure is null ? Task.FromResult(Invocation) : Task.FromException<ModelInvocation>(Failure);
-        }
+        public Task<ModelInvocation> BuildAsync(BuildContextRequest request, CancellationToken cancellationToken) =>
+            Task.FromResult(Invocation);
     }
 
     private sealed class StubModel(

@@ -32,7 +32,11 @@
 - 每个后台任务创建独立 DI Scope，解析瞬态执行器与模型客户端；内存 Store、Manager 和无状态 Context Builder 为 Singleton。
   Console 不捕获类型化客户端为单例，Provider HTTP Handler 由 IHttpClientFactory 管理。
 - 启动时创建可信本地用户和 Default 会话；Host 只保存当前 SessionId，历史由 Conversation 管理，
-  历史选择由 ConversationWindow 完成，不自动选择 MemoryOwner；正常输入通过 LocalTaskManager 创建正式 Task。
+  历史选择由 ConversationWindow 完成；编排器通过 Memory 服务读取当前用户最近最多 20 条有效记忆，
+  再显式调用 Context Builder 组装数据、Executor 执行模型；正常输入通过 LocalTaskManager 创建正式 Task。
+- `/remember TEXT` 显式保存非敏感编码偏好和技术约定到当前用户的工作记忆，跨会话读取，
+  不提交模型任务或写对话历史；无须当前会话。数据仅在本进程内有效，请勿输入个人信息或秘密。
+  写入失败明确报告，不伪装成功；总上下文含记忆超限时失败，尚未实现自动预算分配。
 - `/new NAME` 创建并选择会话，`/session [ID]` 查询指定或当前会话详情，不改变选择；
   `/sessions` 从 1 连续编号并用 `*` 标记当前选择，`/use INDEX|ID` 切换并显示详情。
   编号按当前可见列表解析，不是永久 ID；`/delete INDEX` 隐藏后立即列出重排编号。

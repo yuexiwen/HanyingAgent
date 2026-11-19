@@ -27,7 +27,7 @@ public sealed class ContextBoundaryTests
     public ContextBoundaryTests()
     {
         _memory = new LocalWorkingMemoryManager(_store, _clock);
-        _builder = new LocalContextBuilder(_memory);
+        _builder = new LocalContextBuilder();
     }
 
     private static MemoryOwner Global => new(MemoryScope.Global);
@@ -36,7 +36,7 @@ public sealed class ContextBoundaryTests
     public async Task Lifecycle_WriteUpdateAndForgetAreReflectedWithoutChangingEarlierInvocation()
     {
         var item = await WriteAsync("original");
-        var original = await _builder.BuildAsync(Request(Global), CancellationToken.None);
+        var original = await _builder.BuildAsync(await Request(Global), CancellationToken.None);
         using (var reference = ParseReference(original))
         {
             var entry = Assert.Single(reference.RootElement.EnumerateArray());
@@ -52,7 +52,7 @@ public sealed class ContextBoundaryTests
         {
             Source = "updated-source"
         }, CancellationToken.None);
-        var revised = await _builder.BuildAsync(Request(Global), CancellationToken.None);
+        var revised = await _builder.BuildAsync(await Request(Global), CancellationToken.None);
         using (var reference = ParseReference(revised))
         {
             var entry = Assert.Single(reference.RootElement.EnumerateArray());
@@ -63,7 +63,7 @@ public sealed class ContextBoundaryTests
         Assert.Equal(updated, await _store.GetAsync(item.Id, CancellationToken.None));
 
         await _memory.ForgetAsync(item.Id, CancellationToken.None);
-        AssertPlain(await _builder.BuildAsync(Request(Global), CancellationToken.None));
+        AssertPlain(await _builder.BuildAsync(await Request(Global), CancellationToken.None));
         Assert.Null(await _store.GetAsync(item.Id, CancellationToken.None));
         Assert.Empty(await _store.ListByOwnerAsync(Global, CancellationToken.None));
         using var snapshot = ParseReference(original);
@@ -83,7 +83,7 @@ public sealed class ContextBoundaryTests
         var updated = await _memory.UpdateAsync(item.Id,
             Update("status-content") with { Status = status }, CancellationToken.None);
 
-        var invocation = await _builder.BuildAsync(Request(Global), CancellationToken.None);
+        var invocation = await _builder.BuildAsync(await Request(Global), CancellationToken.None);
 
         if (readable)
         {
@@ -106,7 +106,7 @@ public sealed class ContextBoundaryTests
     {
         var item = await WriteAsync(expiresAt: Now.AddTicks(tickOffset));
 
-        var invocation = await _builder.BuildAsync(Request(Global), CancellationToken.None);
+        var invocation = await _builder.BuildAsync(await Request(Global), CancellationToken.None);
 
         if (tickOffset > 0)
         {
@@ -125,11 +125,11 @@ public sealed class ContextBoundaryTests
     public async Task AdvancingTime_RemovesLastReferenceAndRulesButPreservesStoredRecord()
     {
         var item = await WriteAsync(expiresAt: Now.AddTicks(1));
-        var before = await _builder.BuildAsync(Request(Global), CancellationToken.None);
+        var before = await _builder.BuildAsync(await Request(Global), CancellationToken.None);
         Assert.Equal(3, before.Messages.Count);
 
         _clock.Advance(TimeSpan.FromTicks(1));
-        AssertPlain(await _builder.BuildAsync(Request(Global), CancellationToken.None));
+        AssertPlain(await _builder.BuildAsync(await Request(Global), CancellationToken.None));
 
         Assert.Equal(item, await _store.GetAsync(item.Id, CancellationToken.None));
         using var reference = ParseReference(before);
@@ -143,16 +143,16 @@ public sealed class ContextBoundaryTests
         var item = await WriteAsync(expiresAt: Now);
         await _memory.UpdateAsync(item.Id,
             Update() with { Status = MemoryStatus.Expired, ExpiresAt = Now }, CancellationToken.None);
-        AssertPlain(await _builder.BuildAsync(Request(Global), CancellationToken.None));
+        AssertPlain(await _builder.BuildAsync(await Request(Global), CancellationToken.None));
 
         await _memory.UpdateAsync(item.Id,
             Update() with { Status = MemoryStatus.Confirmed, ExpiresAt = Now }, CancellationToken.None);
-        AssertPlain(await _builder.BuildAsync(Request(Global), CancellationToken.None));
+        AssertPlain(await _builder.BuildAsync(await Request(Global), CancellationToken.None));
 
         var restored = await _memory.UpdateAsync(item.Id,
             Update("restored") with { Status = MemoryStatus.Confirmed, ExpiresAt = null },
             CancellationToken.None);
-        var invocation = await _builder.BuildAsync(Request(Global), CancellationToken.None);
+        var invocation = await _builder.BuildAsync(await Request(Global), CancellationToken.None);
 
         using var reference = ParseReference(invocation);
         Assert.Equal("restored", Assert.Single(reference.RootElement.EnumerateArray())
@@ -186,7 +186,7 @@ public sealed class ContextBoundaryTests
         {
             var equivalent = new MemoryOwner(
                 item.Owner.Scope, item.Owner.SessionId, item.Owner.TaskId, item.Owner.UserId);
-            var invocation = await _builder.BuildAsync(Request(item.Owner, equivalent), CancellationToken.None);
+            var invocation = await _builder.BuildAsync(await Request(item.Owner, equivalent), CancellationToken.None);
 
             using var reference = ParseReference(invocation);
             var entry = Assert.Single(reference.RootElement.EnumerateArray());
@@ -201,7 +201,7 @@ public sealed class ContextBoundaryTests
     {
         var item = await WriteAsync();
 
-        AssertPlain(await _builder.BuildAsync(Request(), CancellationToken.None));
+        AssertPlain(await _builder.BuildAsync(await Request(), CancellationToken.None));
 
         Assert.Equal(item, Assert.Single(await _store.ListByOwnerAsync(Global, CancellationToken.None)));
     }
@@ -228,7 +228,7 @@ public sealed class ContextBoundaryTests
             await WriteAsync(owner: owner, expiresAt: _clock.GetUtcNow());
         }
 
-        var invocation = await _builder.BuildAsync(Request(Global, user, Global), CancellationToken.None);
+        var invocation = await _builder.BuildAsync(await Request(Global, user, Global), CancellationToken.None);
 
         using var reference = ParseReference(invocation);
         var entries = reference.RootElement.EnumerateArray().ToArray();
@@ -250,8 +250,8 @@ public sealed class ContextBoundaryTests
             items.Add(await WriteAsync($"content-{index}", index % 2 == 0 ? Global : user));
         }
         var expected = items.Select(item => item.Id.Value).Order(StringComparer.Ordinal).ToArray();
-        var forward = await _builder.BuildAsync(Request(Global, user), CancellationToken.None);
-        var reverse = await _builder.BuildAsync(Request(user, Global), CancellationToken.None);
+        var forward = await _builder.BuildAsync(await Request(Global, user), CancellationToken.None);
+        var reverse = await _builder.BuildAsync(await Request(user, Global), CancellationToken.None);
         using (var reference = ParseReference(forward))
         {
             Assert.Equal(expected, reference.RootElement.EnumerateArray()
@@ -262,7 +262,7 @@ public sealed class ContextBoundaryTests
         var last = items.Single(item => item.Id.Value == expected[^1]);
         _clock.Advance(TimeSpan.FromSeconds(1));
         await _memory.UpdateAsync(last.Id, Update("latest"), CancellationToken.None);
-        var updated = await _builder.BuildAsync(Request(user, Global), CancellationToken.None);
+        var updated = await _builder.BuildAsync(await Request(user, Global), CancellationToken.None);
 
         using var updatedReference = ParseReference(updated);
         Assert.Equal(new[] { last.Id.Value }.Concat(expected[..^1]),
@@ -277,7 +277,7 @@ public sealed class ContextBoundaryTests
     public async Task FinalCharacterBoundary_IncludesRealSerializedMemoryAndDoesNotMutateInputs(int allowance)
     {
         var item = await WriteAsync("line\n\"quoted\"\\\u4F60\uD83D\uDE00");
-        var request = Request(Global) with
+        var request = (await Request(Global)) with
         {
             Messages =
             [
@@ -290,7 +290,7 @@ public sealed class ContextBoundaryTests
         var originalRequest = JsonSerializer.Serialize(request);
         var baseline = await _builder.BuildAsync(request, CancellationToken.None);
         var total = CountCharacters(baseline);
-        var builder = new LocalContextBuilder(_memory, maxInputCharacters: total + allowance);
+        var builder = new LocalContextBuilder(maxInputCharacters: total + allowance);
         Assert.True(total - 1 > request.SystemInstruction.Length + "previousanswercurrent".Length);
 
         if (allowance < 0)
@@ -325,7 +325,7 @@ public sealed class ContextBoundaryTests
     public async Task DefaultLimit_RejectsOversizedRealMemoryWithoutDiscardingItAndCanBeReusedAfterUpdate()
     {
         var item = await WriteAsync(new string('x', LocalContextBuilder.DefaultMaxInputCharacters));
-        var request = Request(Global);
+        var request = await Request(Global);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             _builder.BuildAsync(request, CancellationToken.None));
@@ -333,7 +333,7 @@ public sealed class ContextBoundaryTests
         Assert.Equal(item, Assert.Single(await _store.ListByOwnerAsync(Global, CancellationToken.None)));
         Assert.Equal("current", Assert.IsType<ModelUserMessage>(Assert.Single(request.Messages)).Content);
         var updated = await _memory.UpdateAsync(item.Id, Update("short"), CancellationToken.None);
-        var invocation = await _builder.BuildAsync(request, CancellationToken.None);
+        var invocation = await _builder.BuildAsync(await Request(Global), CancellationToken.None);
         using var reference = ParseReference(invocation);
         Assert.Equal("short", Assert.Single(reference.RootElement.EnumerateArray())
             .GetProperty("Content").GetString());
@@ -347,12 +347,13 @@ public sealed class ContextBoundaryTests
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
+        var request = await Request(Global);
         var error = await Assert.ThrowsAsync<OperationCanceledException>(() =>
-            _builder.BuildAsync(Request(Global), cancellation.Token));
+            _builder.BuildAsync(request, cancellation.Token));
 
         Assert.Equal(cancellation.Token, error.CancellationToken);
         Assert.Equal(item, await _store.GetAsync(item.Id, CancellationToken.None));
-        using var reference = ParseReference(await _builder.BuildAsync(Request(Global), CancellationToken.None));
+        using var reference = ParseReference(await _builder.BuildAsync(await Request(Global), CancellationToken.None));
         Assert.Equal(item.Id.Value, Assert.Single(reference.RootElement.EnumerateArray())
             .GetProperty("Id").GetString());
     }
@@ -367,8 +368,15 @@ public sealed class ContextBoundaryTests
     private static MemoryUpdateRequest Update(string content = "updated") =>
         new(content, "test", 0.8, 0.6, MemoryStatus.Active, null);
 
-    private static BuildContextRequest Request(params MemoryOwner[] owners) =>
-        new("system", [new ModelUserMessage("current")], owners);
+    private async Task<BuildContextRequest> Request(params MemoryOwner[] owners)
+    {
+        var memories = new List<MemoryItem>();
+        foreach (var owner in owners.Distinct())
+        {
+            memories.AddRange(await _memory.ListRecentAsync(new MemoryReadRequest(owner, Limit: 20), CancellationToken.None));
+        }
+        return new BuildContextRequest("system", [new ModelUserMessage("current")], memories);
+    }
 
     private static void AssertPlain(ModelInvocation invocation)
     {

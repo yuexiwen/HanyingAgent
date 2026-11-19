@@ -37,7 +37,7 @@ internal sealed class ConsoleRenderer
             return Task.CompletedTask;
         }
         return WriteLineAsync(
-        "HanyingAgent - local in-memory tasks. Replies appear automatically. /help, /logs [on|off], /new NAME, /session [ID], /sessions, /use INDEX|ID, /delete INDEX, /history [COUNT|all], /tasks [CURSOR], /task [ID], /wait [ID], /cancel [ID], /close, /exit. Task commands default to the last submitted task. /delete hides without deleting data. Exit cancels running tasks.");
+        "HanyingAgent - local in-memory tasks. Replies appear automatically. /help, /logs [on|off], /remember TEXT, /new NAME, /session [ID], /sessions, /use INDEX|ID, /delete INDEX, /history [COUNT|all], /tasks [CURSOR], /task [ID], /wait [ID], /cancel [ID], /close, /exit. Task commands default to the last submitted task. /remember stores non-sensitive coding preferences and technical conventions for this user across sessions, in memory only. Do not enter personal data or secrets. /delete hides without deleting data. Exit cancels running tasks.");
     }
 
     public async Task ShowPromptAsync()
