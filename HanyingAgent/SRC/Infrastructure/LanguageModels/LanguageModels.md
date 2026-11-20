@@ -5,7 +5,7 @@
 将统一模型协议适配到具体 Provider，实现请求发送、响应解析及后续流式输出。
 
 当前没有子目录，已有 [OllamaLanguageModelRuntime](./OllamaLanguageModelRuntime.cs)，实现
-[ILanguageModelRuntime](../../Contracts/LanguageModels/Operations/ILanguageModelRuntime.cs)。
+[ILanguageModelRuntime](../../Contracts/Agent/LanguageModels/Operations/ILanguageModelRuntime.cs)。
 它使用 .NET 自带 HttpClient 与 JSON 序列化，通过 Ollama 原生 POST /api/chat 提供纯文本、非流式调用，
 不引入 Provider SDK，也不改变公共契约。
 
@@ -14,9 +14,9 @@
 以下为独立调用示例；Ollama 服务和模型需由运行环境事先准备，不要求打开 ollama run 聊天客户端：
 
 ```csharp
-using HanyingAgent.Contracts.LanguageModels.Models;
-using HanyingAgent.Contracts.LanguageModels.Operations;
-using HanyingAgent.Contracts.LanguageModels.Operations.Requests;
+using HanyingAgent.Contracts.Agent.LanguageModels.Models;
+using HanyingAgent.Contracts.Agent.LanguageModels.Operations;
+using HanyingAgent.Contracts.Agent.LanguageModels.Operations.Requests;
 using HanyingAgent.Infrastructure.LanguageModels;
 
 using var client = new HttpClient
@@ -75,13 +75,13 @@ Ollama 原生服务不因填写模型名称而获得访问保护，远程部署�
 解决方案构建 0 警告、0 错误；入口仍仅输出 HanyingAgent，应用 71 个编译项不包含 TEST。
 另通过实际 C# 适配器及真实 Context 调用本机 Ollama 0.40.16 / qwen2.5:1.5b：
 合成问题 2 + 3 返回 5，结束原因为 Stop，服务报告输入 33、输出 2 Tokens。
-真实联调不是默认测试依赖；离线测试不要求本机安装 Ollama。详见 [LanguageModels 测试](../../../TEST/HanyingAgent.Tests/LanguageModels/LanguageModels.md)。
+真实联调不是默认测试依赖；离线测试不要求本机安装 Ollama。详见 [LanguageModels 测试](../../../TEST/HanyingAgent.Tests/Infrastructure/LanguageModels/LanguageModels.md)。
 
 当前不提供流式、工具调用、多模态、模型目录、自动拉取、认证配置框架或 Agent 循环。
 可选 ILogger 构造参数用于记录调用边界和用量，未传时保留无日志的独立使用方式。
 num_ctx 是运行配置，不是输入 Token 计数器；调用适配器不裁剪或压缩消息。
 独立的 [ConservativeModelTokenCounter](./ConservativeModelTokenCounter.cs) 实现
-[IModelTokenCounter](../../Contracts/LanguageModels/Operations/IModelTokenCounter.cs)，
+[IModelTokenCounter](../../Contracts/Agent/LanguageModels/Operations/IModelTokenCounter.cs)，
 由 Host 配置相同的模型名称和窗口，供 Context 统一选择 History / Memory。
 当前估算按每 UTF-8 字节一个 Token，另加每消息 8、整个请求 8 的协议余量；
 预算还扣除配置的输出上限与默认 128 Token 安全空间。

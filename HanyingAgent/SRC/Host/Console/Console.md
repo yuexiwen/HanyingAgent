@@ -10,13 +10,13 @@ Console 专属交互组件，不承担 Session / Task 的权威存储、业务�
 | [ConsoleLogControl](./ConsoleLogControl.cs) | 保存线程安全的进程级日志显示开关，通过标准日志筛选控制 Console Provider，不替代 ILogger。 |
 | [ConsoleState](./ConsoleState.cs) | 维护当前会话、最近任务、待展示结果、未读结果与去重标记。 |
 
-[ConsoleApplication](../ConsoleApplication.cs) 每次运行创建一组组件，负责输入与任务结果的单循环协调，
+[ConsoleApplication](./ConsoleApplication.cs) 每次运行创建一组组件，负责输入与任务结果的单循环协调，
 初始化和退出收尾。状态只属于该次 Console 运行，查询或选择会话不创建另一套任务状态机。
 命令处理器通过管理器读取数据后交给 Renderer；所有渲染由主循环或其等待的命令处理调用完成，
 后台任务不直接写终端。
 
 历史读取与轮数选择由 Capabilities 的
-[ConversationHistoryReader](../../Capabilities/Conversation/ConversationHistoryReader.cs) 完成。
+[ConversationHistoryReader](../../Runtime/Agent/Capabilities/Conversation/ConversationHistoryReader.cs) 完成。
 `/history` 的数量解析属于命令适配，显示格式与未记录回复的提示属于渲染。
 
 ## 用户记忆
@@ -58,7 +58,7 @@ ConsolePresentation 只处理富终端绘制，不依赖任务或会话服务。
 在仓库根目录执行：
 
 ```powershell
-dotnet test .\HanyingAgent\TEST\HanyingAgent.Tests\HanyingAgent.Tests.csproj --configuration Release --no-restore --filter "FullyQualifiedName~Execution" -warnaserror
+dotnet test .\HanyingAgent\TEST\HanyingAgent.Tests\HanyingAgent.Tests.csproj --configuration Release --no-restore --filter "FullyQualifiedName~HanyingAgent.Tests.Agent.Execution|FullyQualifiedName~HanyingAgent.Tests.Host" -warnaserror
 dotnet run --project .\HanyingAgent\HanyingAgent.csproj --configuration Release --no-build
 ```
 

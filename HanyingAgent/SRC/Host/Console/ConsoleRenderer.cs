@@ -1,8 +1,8 @@
-using HanyingAgent.Contracts.Conversation.Models;
-using HanyingAgent.Contracts.Sessions.Models;
-using HanyingAgent.Contracts.Tasks.Models;
-using HanyingAgent.Contracts.Tasks.Operations.Responses;
-using TaskStatus = HanyingAgent.Contracts.Tasks.Models.TaskStatus;
+using HanyingAgent.Contracts.Agent.Capabilities.Conversation.Models;
+using HanyingAgent.Contracts.Management.Sessions.Models;
+using HanyingAgent.Contracts.Management.Tasks.Models;
+using HanyingAgent.Contracts.Management.Tasks.Operations.Responses;
+using TaskStatus = HanyingAgent.Contracts.Management.Tasks.Models.TaskStatus;
 
 namespace HanyingAgent.Host.Console;
 

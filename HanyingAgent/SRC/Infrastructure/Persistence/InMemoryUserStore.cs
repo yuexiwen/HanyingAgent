@@ -1,5 +1,5 @@
-using HanyingAgent.Contracts.Users.Models;
-using HanyingAgent.Runtime.Users;
+using HanyingAgent.Contracts.Management.Users.Models;
+using HanyingAgent.Runtime.Management.Users;
 
 namespace HanyingAgent.Infrastructure.Persistence;
 

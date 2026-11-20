@@ -1,5 +1,5 @@
-using HanyingAgent.Contracts.LanguageModels.Models;
-using HanyingAgent.Contracts.LanguageModels.Operations;
+using HanyingAgent.Contracts.Agent.LanguageModels.Models;
+using HanyingAgent.Contracts.Agent.LanguageModels.Operations;
 
 namespace HanyingAgent.Tests.Support;
 

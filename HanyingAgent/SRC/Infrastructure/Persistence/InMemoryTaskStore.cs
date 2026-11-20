@@ -1,11 +1,11 @@
 using System.Text.Json;
-using HanyingAgent.Contracts.Tasks.Models;
-using HanyingAgent.Contracts.Tasks.Operations.Requests;
-using HanyingAgent.Contracts.Tasks.Operations.Responses;
-using HanyingAgent.Contracts.Sessions.Models;
-using HanyingAgent.Contracts.Users.Models;
-using HanyingAgent.Runtime.Tasks;
-using TaskStatus = HanyingAgent.Contracts.Tasks.Models.TaskStatus;
+using HanyingAgent.Contracts.Management.Tasks.Models;
+using HanyingAgent.Contracts.Management.Tasks.Operations.Requests;
+using HanyingAgent.Contracts.Management.Tasks.Operations.Responses;
+using HanyingAgent.Contracts.Management.Sessions.Models;
+using HanyingAgent.Contracts.Management.Users.Models;
+using HanyingAgent.Runtime.Management.Tasks;
+using TaskStatus = HanyingAgent.Contracts.Management.Tasks.Models.TaskStatus;
 
 namespace HanyingAgent.Infrastructure.Persistence;
 

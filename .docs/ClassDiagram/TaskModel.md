@@ -1,6 +1,6 @@
 # Task Contracts 类图
 
-本图展示 [Contracts/Tasks](../../HanyingAgent/SRC/Contracts/Tasks/Tasks.md)
+本图展示 [Contracts/Management/Tasks](../../HanyingAgent/SRC/Contracts/Management/Tasks/Tasks.md)
 中的公共接口、请求、响应与业务模型，并补充任务管理与存储实现的关系。
 
 图中接口返回值省略外层 `Task<T>`；所有接口方法均为异步方法，
@@ -239,10 +239,10 @@ ExecutionHandle 属于 LocalTaskManager，不保存到共享状态。
 ## 契约与实现的关系
 
 ```text
-Contracts/Tasks
+Contracts/Management/Tasks
     定义：任务是什么，外部能做什么，传递什么数据
             ↑ 实现
-Runtime/Tasks
+Runtime/Management/Tasks
     管理：提交、执行、取消、等待和收尾
             ↓ 使用存储端口
 Infrastructure/Persistence
@@ -256,7 +256,7 @@ Infrastructure/Persistence
 - `TaskStatus`：任务状态；定义的状态不代表当前执行策略全部支持。
 - `TaskResult`：任务最终结果，可包含回答或错误，回答文本不等于任务成功。
 - `ITaskManager`：外部操作任务的公共协议；具体实现见
-  [LocalTaskManager](../../HanyingAgent/SRC/Runtime/Tasks/LocalTaskManager.cs)。
+  [LocalTaskManager](../../HanyingAgent/SRC/Runtime/Management/Tasks/LocalTaskManager.cs)。
 - 提交返回接受快照，不等待最终结果；取消返回请求后的快照，不保证执行已经停止。
 - 当前 Direct 实现不支持补充输入、等待用户或工具执行；
   `WaitForResultAsync` 是本地管理器的辅助方法，不在当前公共接口中。

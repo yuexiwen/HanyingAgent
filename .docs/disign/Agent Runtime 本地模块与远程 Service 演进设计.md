@@ -176,8 +176,8 @@ IWorkingMemoryManager 同样继承 IMemoryWriter，仅增加自己的直接读�
 工作记忆的独立接口使用 `ListRecentAsync(MemoryReadRequest)` 返回 `MemoryItem` 列表，
 不接受检索 Query，也不返回相关性 Score。两种能力的完整契约见设计初稿第 13 节。
 契约目录分为 Models 和 Operations，请求与响应嵌套在 Operations 下，命名空间分别为
-`HanyingAgent.Contracts.Memory.Models`、`HanyingAgent.Contracts.Memory.Operations`、
-`HanyingAgent.Contracts.Memory.Operations.Requests` 和 `HanyingAgent.Contracts.Memory.Operations.Responses`；
+`HanyingAgent.Contracts.Agent.Capabilities.Memory.Models`、`HanyingAgent.Contracts.Agent.Capabilities.Memory.Operations`、
+`HanyingAgent.Contracts.Agent.Capabilities.Memory.Operations.Requests` 和 `HanyingAgent.Contracts.Agent.Capabilities.Memory.Operations.Responses`；
 本文示例省略对应 using，适配器实现按实际使用的类型导入。
 短期到长期的整合是提取、去重后创建新记忆，不再用修改 Scope 的 Promote 操作表达。
 
@@ -758,7 +758,7 @@ Model Gateway 可统一处理：
 ## 9.4 Tool Provider
 
 Tool Manager 本身可以保留在 Runtime 内，但具体 Tool Provider 可以本地或远程。
-当前公共工具契约已定义在 Contracts/Tools：按任务列举允许使用的定义，
+当前公共工具契约已定义在 Contracts/Agent/Capabilities/Tools：按任务列举允许使用的定义，
 InvokeAsync 等待本次调用并返回 ToolObservation，不使用提交后轮询协议。
 ToolResult 与 ToolObservation 共享 Succeeded、Failed、Cancelled、OutcomeUnknown 状态，
 避免将响应丢失误判为未执行。本地注册与具体工具实现协议不放入远程公共接口。
@@ -1223,16 +1223,13 @@ P99 = 1 s
 
 ---
 
-## 13. 建议的 Project 结构调整
+## 13. 当前 Project 结构与远程演进
 
-以 Contracts + 适配器思想保留远程替换能力，目录按五种角色分组：
-
-以下是演进阶段的逻辑组织示例。当前 `HanyingAgent` 项目骨架采用设计初稿第 4 节的目录结构，
-将具体适配器统一放在 `Infrastructure` 下，暂不单独创建 `Adapters` 目录或远程实现。
-应用项目位于工作区的 `HanyingAgent`，模块目录位于其 `SRC` 子目录；
-同在项目根目录下的 `TEST` 预留给后续单元测试项目，应用项目显式排除 TEST 子树。
-项目文件、Program.cs、bin / obj 不移入 SRC。SRC 顶层只保留 Contracts、Host、Runtime、Capabilities 和 Infrastructure。
-下图展示模块分组及演进方向，不代表已创建相应实现或测试框架。
+2026-11-20 按 Management / Agent 同步整理实现与 Contracts，仍保持单 Project、单进程。
+当前模块目录位于 HanyingAgent/SRC，正式测试项目位于 HanyingAgent/TEST/HanyingAgent.Tests；
+Program.cs、项目文件、配置与 bin / obj 留在应用项目根目录。
+具体适配统一放在 Infrastructure，不提前增加 Remote Adapter 或 HTTP 入口。
+目录与命名空间同步迁移，但接口签名、JSON 数据形状和业务语义不因分组而改变。
 
 当前 Task 公共入口为 ITaskManager：SubmitAsync 接受后返回 TaskInfo，不等待整个执行完成；
 后续通过 GetAsync、GetResultAsync 查询，通过 ProvideInputAsync 回答等待，通过 CancelAsync 请求取消。
@@ -1244,7 +1241,7 @@ P99 = 1 s
 远程适配器需保留未知查询返回 null、未知更新报错的区别；UserId 不作为调用者权限凭证。
 SessionInfo 与创建请求已要求 UserId，形成一个用户多个会话、一个会话一个用户的归属；
 远程创建、恢复与访问需校验用户及权限，不能用当前调用者替代缺失的持久化归属。
-旧请求或会话 JSON 缺少 UserId 时显式报错，需明确迁移；尚未实现用户存储，不添加多租户或外部身份绑定。
+旧请求或会话 JSON 缺少 UserId 时显式报错，需明确迁移；当前已有内存用户存储，但没有持久化、多租户或外部身份绑定。
 
 当前 ILanguageModelRuntime 定义一次非流式生成，使用类型化消息与可用工具定义，
 返回文本、完整工具调用、明确结束原因和可空用量；不执行工具，也不决定 Task 是否完成。
@@ -1254,107 +1251,52 @@ ModelToolMessage 复用 ToolObservation，远程适配需保留工具角色、�
 IConversationManager 已定义稳定 MessageId 的追加、按 ID 读取和按 Session 分页读取，
 远程响应丢失后复用原 MessageId 重试；同 ID 不同载荷报冲突，不生成重复历史。
 服务端分配 Sequence，首次读取最近 20 条、页内升序，游标读取更早记录；
-历史记录独立于 ModelMessage，保留工具关联、失败和结束信息。去重、权限及存储仍待实现。
+历史记录独立于 ModelMessage，保留工具关联、失败和结束信息。当前内存实现已有去重、归属校验和存储，远程一致性与授权仍需单独设计。
 
 ```text
 SRC
-│
 ├── Contracts
-│   ├── Sessions
-│   ├── Tasks
-│   │   ├── Models
-│   │   │   ├── TaskId.cs
-│   │   │   ├── TaskInfo.cs
-│   │   │   └── TaskStatus.cs
-│   │   └── Operations
-│   │       ├── ITaskManager.cs
-│   │       ├── Requests
-│   │       │   ├── SubmitTaskRequest.cs
-│   │       │   ├── ProvideTaskInputRequest.cs
-│   │       │   └── ListSessionTasksRequest.cs
-│   │       └── Responses
-│   │           ├── TaskListResponse.cs
-│   │           └── TaskResult.cs
-│   ├── Users
-│   │   ├── Models
-│   │   │   ├── UserId.cs
-│   │   │   └── UserInfo.cs
-│   │   └── Operations
-│   │       ├── IUserManager.cs
-│   │       └── Requests
-│   │           ├── CreateUserRequest.cs
-│   │           └── UpdateUserRequest.cs
-│   ├── Conversation
-│   │   ├── Models
-│   │   └── Operations
-│   │       ├── Requests
-│   │       └── Responses
-│   ├── Memory
-│   │   ├── Models
-│   │   │   ├── MemoryItem.cs
-│   │   │   ├── MemoryId.cs
-│   │   │   ├── MemoryOwner.cs
-│   │   │   ├── MemoryScope.cs
-│   │   │   ├── MemoryType.cs
-│   │   │   └── MemoryStatus.cs
-│   │   └── Operations
-│   │       ├── IMemoryWriter.cs
-│   │       ├── IWorkingMemoryManager.cs
-│   │       ├── ILongTermMemoryManager.cs
-│   │       ├── Requests
-│   │       │   ├── MemoryWriteRequest.cs
-│   │       │   ├── MemoryUpdateRequest.cs
-│   │       │   ├── MemoryReadRequest.cs
-│   │       │   └── MemorySearchRequest.cs
-│   │       └── Responses
-│   │           └── MemorySearchResult.cs
-│   ├── Tools
-│   │   ├── Models
-│   │   └── Operations
-│   │       ├── Requests
-│   │       └── Responses
-│   └── LanguageModels
-│       ├── Models
-│       └── Operations
-│           ├── Requests
-│           └── Responses
-│
+│   ├── Management
+│   │   ├── Users
+│   │   ├── Sessions
+│   │   └── Tasks
+│   └── Agent
+│       ├── Context
+│       ├── Execution
+│       ├── LanguageModels
+│       └── Capabilities
+│           ├── Conversation
+│           ├── Memory
+│           └── Tools
 ├── Host
-│   ├── AgentShell
-│   └── CommandParser
-│
+│   ├── Configuration
+│   └── Console
 ├── Runtime
-│   ├── Orchestration
-│   ├── Execution
-│   ├── Context
-│   ├── Conversation
-│   └── State
-│
-├── Capabilities
-│   ├── Memory
-│   │   ├── LocalWorkingMemoryManager.cs
-│   │   ├── LocalLongTermMemoryManager.cs
-│   │   ├── IWorkingMemoryStore.cs
-│   │   ├── ILongTermMemoryStore.cs
-│   │   └── ILongTermMemoryRetriever.cs
-│   ├── Skills
-│   └── Tools
-│
-└── Infrastructure
-    ├── LanguageModels
-    ├── Persistence
-    ├── Observability
-    ├── Memory                    后续需要时创建
-    │   ├── RemoteLongTermMemoryManager.cs
-    │   └── LongTermMemoryServiceClient.cs
-    └── State                     后续需要时创建
-        ├── RemoteStateManager.cs
-        └── StateServiceClient.cs
+│   ├── Management
+│   │   ├── Users
+│   │   ├── Sessions
+│   │   └── Tasks
+│   └── Agent
+│       ├── Orchestration
+│       ├── Execution
+│       │   └── State             仅保留未来执行进度规划
+│       ├── Context
+│       └── Capabilities
+│           ├── Conversation
+│           ├── Memory
+│           ├── Skills
+│           └── Tools
+├── Infrastructure
+│   ├── LanguageModels
+│   ├── Persistence
+│   └── Observability
+└── Diagnostics
 ```
 
 Runtime 依赖能力契约，Capabilities 实现业务规则并定义内部依赖端口，
 Infrastructure 实现具体存储、检索与远程调用，不能反过来让业务模块依赖某个数据库或客户端。
-Host 只适配用户交互，Session 生命周期协调放在 Runtime/Orchestration。
+Host 负责入口适配，Session 生命周期位于 Runtime/Management/Sessions，任务生命周期位于 Management/Tasks；
+Agent/Orchestration 只协调实际对话流程。
 这些是逻辑分组，不是微服务边界；仍保持单 Project、单进程，由项目根入口完成组合。
 
 对于学习项目，不必一开始实现所有 Remote Adapter。
@@ -1371,6 +1313,19 @@ Host 只适配用户交互，Session 生命周期协调放在 Runtime/Orchestrat
 - 两种服务完全不同的工程关注点
 
 ---
+
+| 分组 | 职责 |
+|---|---|
+| Host | 入口适配与应用组装，当前为 Console，包含 ConsoleApplication。 |
+| Runtime/Management | 用户、会话和任务生命周期管理，安排执行并跟踪结果。 |
+| Runtime/Agent | Orchestration、Execution、Context 和 Capabilities，处理实际工作。 |
+| Contracts/Management | Users、Sessions、Tasks 的公共协议。 |
+| Contracts/Agent | Context、Execution、LanguageModels 及能力协议。 |
+| Infrastructure | 模型 Provider、具体 Store、未来远程客户端等技术实现。 |
+| Diagnostics | 跨模块日志事件定义。 |
+
+未来远程记忆或进度客户端可按需放入 Infrastructure 下的相应技术适配目录；
+不把业务管理器、工具执行实现或内容数据全部放入一个 Data 目录。
 
 ## 14. 推荐的学习演进路径
 

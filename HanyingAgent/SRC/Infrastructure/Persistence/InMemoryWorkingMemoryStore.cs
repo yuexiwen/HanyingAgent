@@ -1,6 +1,6 @@
-using HanyingAgent.Capabilities.Memory;
-using HanyingAgent.Contracts.Memory.Models;
-using HanyingAgent.Contracts.Memory.Operations.Requests;
+using HanyingAgent.Runtime.Agent.Capabilities.Memory;
+using HanyingAgent.Contracts.Agent.Capabilities.Memory.Models;
+using HanyingAgent.Contracts.Agent.Capabilities.Memory.Operations.Requests;
 
 namespace HanyingAgent.Infrastructure.Persistence;
 
