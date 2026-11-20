@@ -1,3 +1,4 @@
+using HanyingAgent.Host.Console;
 using System.Text;
 using HanyingAgent.Host;
 using Microsoft.Extensions.DependencyInjection;

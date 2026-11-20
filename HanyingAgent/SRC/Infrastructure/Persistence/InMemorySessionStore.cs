@@ -1,6 +1,6 @@
-using HanyingAgent.Contracts.Sessions.Models;
-using HanyingAgent.Contracts.Users.Models;
-using HanyingAgent.Runtime.Sessions;
+using HanyingAgent.Contracts.Management.Sessions.Models;
+using HanyingAgent.Contracts.Management.Users.Models;
+using HanyingAgent.Runtime.Management.Sessions;
 
 namespace HanyingAgent.Infrastructure.Persistence;
 

@@ -1,15 +1,15 @@
 using System.Globalization;
-using HanyingAgent.Contracts.Sessions.Models;
-using HanyingAgent.Contracts.Sessions.Operations;
-using HanyingAgent.Contracts.Sessions.Operations.Requests;
-using HanyingAgent.Contracts.Tasks.Models;
-using HanyingAgent.Contracts.Tasks.Operations.Requests;
-using HanyingAgent.Contracts.Users.Models;
-using HanyingAgent.Contracts.Memory.Models;
-using HanyingAgent.Contracts.Memory.Operations;
-using HanyingAgent.Contracts.Memory.Operations.Requests;
-using HanyingAgent.Capabilities.Conversation;
-using HanyingAgent.Runtime.Tasks;
+using HanyingAgent.Contracts.Management.Sessions.Models;
+using HanyingAgent.Contracts.Management.Sessions.Operations;
+using HanyingAgent.Contracts.Management.Sessions.Operations.Requests;
+using HanyingAgent.Contracts.Management.Tasks.Models;
+using HanyingAgent.Contracts.Management.Tasks.Operations.Requests;
+using HanyingAgent.Contracts.Management.Users.Models;
+using HanyingAgent.Contracts.Agent.Capabilities.Memory.Models;
+using HanyingAgent.Contracts.Agent.Capabilities.Memory.Operations;
+using HanyingAgent.Contracts.Agent.Capabilities.Memory.Operations.Requests;
+using HanyingAgent.Runtime.Agent.Capabilities.Conversation;
+using HanyingAgent.Runtime.Management.Tasks;
 
 namespace HanyingAgent.Host.Console;
 

@@ -1,0 +1,28 @@
+# Tasks
+
+## 功能与定位
+
+定义一次 Agent 工作请求的身份、Session 归属、生命周期和操作协议；一个任务可以包含多轮模型调用、工具动作和用户补充。
+
+当前由 [LocalTaskManager](../../../Runtime/Management/Tasks/LocalTaskManager.cs) 实现可信本地 Direct 任务闭环，
+包括内存存储、后台运行、查询和取消；详细语义见 [Orchestration](../../../Runtime/Agent/Orchestration/Orchestration.md)。
+契约保留等待工具和用户等未来状态，本阶段不进入这些状态，ProvideInput 明确拒绝。
+
+## 直属子模块
+
+| 子模块 | 一句话概述 |
+|---|---|
+| [Models](./Models/Models.md) | 定义 TaskId、任务信息快照和包含等待、取消请求及终态的生命周期。 |
+| [Operations](./Operations/Operations.md) | 定义接受新任务、查询历史与结果、补充输入和请求取消的协议。 |
+
+## 与 Session 的关系
+
+每个 TaskInfo 保存所属 SessionId，历史任务通过该关联反向查询，不在 SessionInfo 中维护无限增长的任务列表。
+同一 Session 最多一个未结束任务；接受新任务时创建 Task 并占用 Session，忙时显式拒绝，不排队。
+用户对 WaitingForUser 的补充继续原 Task，不创建新任务；显式 Shell 命令不是 Task。
+
+## 设计边界
+
+Submit 只返回接受后的状态快照，不等待完成；终态结果通过独立查询读取。
+公共信息不暴露锁、执行句柄或任意状态更新委托；详细恢复游标属于后续 Runtime/Agent/Execution/State 设计。
+提供输入通过版本校验防止过期回答恢复错误轮次，具体业务校验与权限由后续实现兑现。

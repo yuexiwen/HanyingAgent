@@ -105,173 +105,120 @@ close session-01
 
 ## 4. 总体模块结构
 
-项目名为 `HanyingAgent`。第一版使用单个 Console Project，当前骨架目标框架为 .NET 10。
-HanyingAgent 仍是项目根目录；模块目录放入其 SRC 子目录，TEST 与 SRC 同级。
-项目文件、Program.cs 和生成目录 bin / obj 保留在项目根目录：
+项目名为 HanyingAgent，采用单个 .NET 10 Console Project、单进程的模块化单体。
+2026-11-20 按入口适配、任务生命周期流程、Agent 执行流程整理目录和命名空间。
+以下是当前目录；后续功能规划不能解释为已经存在的实现。
 
 ```text
 Hanying
 ├── .docs
 │   ├── workmile
 │   ├── disign
-│   └── discussion
+│   ├── discussion
+│   └── ClassDiagram
 └── HanyingAgent
     ├── HanyingAgent.csproj
+    ├── HanyingAgent.slnx
     ├── Program.cs
+    ├── appsettings.json
     ├── SRC
-    │   └── 各业务模块目录
     ├── TEST
-    │   └── .gitkeep
+    │   └── HanyingAgent.Tests
     ├── bin
     └── obj
 ```
 
-`HanyingAgent/SRC` 保存业务模块代码，入口 Program.cs 留在项目根目录；
-`HanyingAgent/TEST` 预留给后续 UT 项目，目前不选择测试框架或创建测试项目。
-应用项目通过 DefaultItemExcludes 排除 TEST 子树，避免将测试代码及其生成文件编译进应用。
-测试项目后续通过 ProjectReference 引用应用项目。移动目录不改变业务类型的命名空间。
+应用通过 DefaultItemExcludes 排除 TEST 子树，测试通过 ProjectReference 引用应用，
+继续使用正式 xUnit / VSTest 测试项目。Program.cs、配置、项目文件和生成目录留在项目根目录。
 
 从工作区根目录构建和运行：
 
 ```powershell
-dotnet build .\HanyingAgent\HanyingAgent.csproj
+dotnet build .\HanyingAgent\HanyingAgent.slnx --no-restore --configuration Release -warnaserror
 dotnet run --project .\HanyingAgent\HanyingAgent.csproj
 ```
 
-以下为 `HanyingAgent/SRC` 内部结构；后续模块相对路径（如 Contracts/Memory）均相对于 SRC：
+模块目录相对于 HanyingAgent/SRC：
 
 ```text
 SRC
 ├── Contracts
-│   ├── Sessions
-│   │   ├── Models
-│   │   └── Operations
-│   │       └── Requests
-│   ├── Tasks
-│   │   ├── Models
-│   │   └── Operations
-│   │       ├── Requests
-│   │       └── Responses
-│   ├── Users
-│   │   ├── Models
-│   │   └── Operations
-│   │       └── Requests
-│   ├── Conversation
-│   │   ├── Models
-│   │   └── Operations
-│   │       ├── Requests
-│   │       └── Responses
+│   ├── Management
+│   │   ├── Users
+│   │   ├── Sessions
+│   │   └── Tasks
+│   └── Agent
+│       ├── Context
+│       ├── Execution
+│       ├── LanguageModels
+│       └── Capabilities
+│           ├── Conversation
+│           ├── Memory
+│           └── Tools
+├── Host
+│   ├── Configuration
+│   └── Console
+├── Runtime
+│   ├── Management
+│   │   ├── Users
+│   │   ├── Sessions
+│   │   └── Tasks
+│   └── Agent
+│       ├── Orchestration
+│       ├── Execution
+│       │   └── State             仅保留未来执行进度规划
+│       ├── Context
+│       └── Capabilities
+│           ├── Conversation
+│           ├── Memory
+│           ├── Skills
+│           └── Tools
+├── Infrastructure
 │   ├── LanguageModels
-│   │   ├── Models
-│   │   └── Operations
-│   │       ├── Requests
-│   │       └── Responses
-│   ├── Memory
-│   │   ├── Models
-│   │   └── Operations
-│   │       ├── Requests
-│   │       └── Responses
-│   └── Tools
-│       ├── Models
-│       └── Operations
-│           ├── Requests
-│           └── Responses
-├── Host
-├── Runtime
-│   ├── Orchestration
-│   ├── Execution
-│   ├── Context
-│   ├── Conversation
-│   └── State
-├── Capabilities
-│   ├── Memory
-│   ├── Skills
-│   └── Tools
-└── Infrastructure
-    ├── LanguageModels
-    ├── Persistence
-    └── Observability
+│   ├── Persistence
+│   └── Observability
+└── Diagnostics
 ```
 
-五个顶层目录按角色分组，不是五个微服务，也不要求拆成五个 Project：
+| 分组 | 职责 |
+|---|---|
+| Host | 入口适配与应用组装，当前为 Console，包含 ConsoleApplication。 |
+| Runtime/Management | 用户、会话和任务生命周期管理，安排执行并跟踪结果。 |
+| Runtime/Agent | Orchestration、Execution、Context 和 Capabilities，处理实际工作。 |
+| Contracts/Management | Users、Sessions、Tasks 的公共协议。 |
+| Contracts/Agent | Context、Execution、LanguageModels 及能力协议。 |
+| Infrastructure | 模型 Provider、具体 Store、未来远程客户端等技术实现。 |
+| Diagnostics | 跨模块日志事件定义。 |
 
-| 目录           | 职责                                                     |
-| -------------- | -------------------------------------------------------- |
-| Contracts      | 模块能力接口与可序列化数据契约，不依赖业务或基础设施实现 |
-| Host           | Shell、命令解析与用户交互适配                            |
-| Runtime        | 编排、执行策略、Context 构建和执行状态                   |
-| Capabilities   | Memory、Skill、Tool 等能力的业务规则及其内部依赖端口     |
-| Infrastructure | 模型 Provider、存储、远程客户端与可观测性等技术实现      |
+这不是七个独立服务，也不要求拆分 Project。Contracts 内的每个领域按需保留
+Models、Operations、Requests、Responses；内部 Store 端口仍与所属模块放在一起，
+具体适配放在 Infrastructure，不为接口身份而全部公开到 Contracts。
+Skills 暂无公共契约，不创建空的 Contracts/Agent/Capabilities/Skills；
+HTTP 入口也仅在真正需要时增加。
 
-Runtime 通过契约使用能力，不直接创建数据库或 HTTP 客户端。
-Capabilities 不反向依赖 Runtime 的编排实现；Infrastructure 实现公共契约或模块所需的内部端口。
-例如记忆业务规则放在 Capabilities/Memory，存储端口也可定义于此；
-具体的内存 / JSON / SQLite 实现放在 Infrastructure/Persistence。
-未来的远程记忆客户端或搜索适配器可放在 Infrastructure/Memory，需要时才创建目录。
-Session 生命周期协调属于 Runtime/Orchestration，Host 只负责交互入口。
-Program.cs 保留在项目根目录，通过依赖注入组合实现。
-Contracts/LanguageModels 与 Infrastructure/LanguageModels 表示语言模型能力，
-其他模块内部的 Models 仍表示数据结构分类，不随能力目录重命名。
-Contracts/Conversation 已定义独立的历史消息、类型化内容和追加、查询、分页契约；
-Runtime/Conversation 和 Conversation Store 仍未实现。
-对话历史由 Conversation 模块管理，并由 Infrastructure/Persistence 中后续的 Conversation Store 保存；
-按 SessionId 有序读取，必要时关联 TaskId，不放入 SessionInfo，也不等同于 Memory。
-当前除已有 Contracts 类型外，其余目录仍是骨架；以下为后续组件规划，不代表已实现的文件：
+Task Lifecycle Flow 位于 Management/Tasks：接受任务、校验会话、安排后台入口、查询取消、保存终态和收尾。
+实际代码片段由 .NET 运行时调度，不自行实现线程池。
+Agent Execution Flow 位于 Agent/Orchestration，显式协调平级的 Conversation、Memory、Context 和 Execution。
+Context 统一分配预算，Execution 当前仅执行一次模型调用并解释结果。
+Capabilities 不反向依赖 Orchestration，但可以使用 Management 的可信身份与会话能力。
+Control Plane / Data Plane 是职责视角，不是互斥访问权限或两套存储：
+Console 可以通过业务接口查看历史或显式保存用户记忆。
 
-```text
-SRC
-├── Host
-│   ├── AgentShell
-│   └── CommandParser
-├── Runtime
-│   ├── Orchestration
-│   │   ├── AgentRuntime
-│   │   ├── AgentOrchestrator
-│   │   ├── AgentSession
-│   │   └── SessionManager
-│   ├── Execution
-│   │   ├── ExecutionEngine
-│   │   ├── DirectExecutor
-│   │   ├── ChainExecutor
-│   │   └── ReactExecutor
-│   ├── Context
-│   │   ├── ContextManager
-│   │   ├── ContextAssembler
-│   │   ├── ContextRanker
-│   │   └── ContextBudget
-│   ├── Conversation
-│   │   └── ConversationManager
-│   └── State
-│       └── StateManager
-├── Capabilities
-│   ├── Memory
-│   │   ├── LocalWorkingMemoryManager
-│   │   ├── LocalLongTermMemoryManager
-│   │   ├── IWorkingMemoryStore
-│   │   ├── ILongTermMemoryStore
-│   │   └── ILongTermMemoryRetriever
-│   ├── Skills
-│   │   ├── SkillManager
-│   │   └── SkillCatalog
-│   └── Tools
-│       ├── ToolManager
-│       └── ToolRegistry
-└── Infrastructure
-    ├── LanguageModels
-    │   ├── LanguageModelRuntime
-    │   └── Provider Clients
-    ├── Persistence
-    │   ├── Working Memory Store
-    │   ├── Long-term Memory Store
-    │   ├── Conversation Store
-    │   └── JsonCheckpointStore
-    └── Observability
-        ├── AgentEventHub
-        └── RuntimeMetrics
-```
+Conversation 的实现位于 Agent/Capabilities/Conversation，具体 Store 位于 Infrastructure/Persistence。
+记录按 SessionId 和 Sequence 读取，必要时关联 TaskId，不放入 SessionInfo，也不等同于 Memory。
+Session 生命周期属于 Management/Sessions，不再笼统归给对话 Orchestrator。
+InMemoryAgentState 是 Persistence 的内部共享容器，与 Execution/State 中未实现的进度规划不同。
 
-上面的组件规划省略了 Contracts 子树；公共数据与能力接口仍按前述 Contracts 结构组织，
-不因实现目录分组而移动或改名。仅有一个组件时直接放文件，不为每个类建立空子目录。
+命名空间与目录同步调整，例如 HanyingAgent.Runtime.Management.Tasks、
+HanyingAgent.Runtime.Agent.Context、HanyingAgent.Contracts.Agent.Capabilities.Memory。
+这是源码引用路径变化，不改变 JSON 字段、命令、状态枚举或业务行为。
+当前入口与导航见 [应用文档](../../HanyingAgent/HanyingAgent.md)、
+[源码导航](../../HanyingAgent/SRC/SRC.md)和
+[契约导航](../../HanyingAgent/SRC/Contracts/Contracts.md)。
+
+后续仍可在相同分组下增加 Chain / ReAct 执行策略、Context 排序与摘要、
+长期记忆 Manager / Retriever、Skill Catalog、Tool Registry、Checkpoint、远程适配及指标。
+这些是演进方向，不预创建抽象基类、空目录或新的状态机。
 
 ---
 
@@ -292,7 +239,7 @@ public readonly record struct CheckpointId(string Value);
 当前已定义任务协议，尚未实现 TaskManager、任务存储或执行器：
 
 ```text
-Contracts/Tasks
+Contracts/Management/Tasks
 ├── Models
 │   ├── TaskId
 │   ├── TaskInfo
@@ -308,7 +255,7 @@ Contracts/Tasks
         └── TaskResult
 ```
 
-TaskId 已移入 Contracts/Tasks/Models，SessionInfo 与 MemoryOwner 的引用已同步。
+TaskId 已移入 Contracts/Management/Tasks/Models，SessionInfo 与 MemoryOwner 的引用已同步。
 每个 TaskInfo 保存 SessionId、最初 Input、状态、Version 和时间字段；
 会话历史按 TaskInfo.SessionId 反向分页读取，不在 SessionInfo 内重复维护全部 TaskIds。
 
@@ -377,7 +324,7 @@ public enum AgentCompletionStatus
 当前 Users 定义独立的用户资料协议，没有用户管理器、存储或认证实现：
 
 ```text
-Contracts/Users
+Contracts/Management/Users
 ├── Models
 │   ├── UserId
 │   └── UserInfo
@@ -397,7 +344,7 @@ List 第一版不分页，按 UpdatedAt 降序、ID Ordinal 升序返回可见�
 创建资料不等于登录或认证，UserId 不代表调用者权限。SessionInfo 与 CreateSessionRequest
 已通过必需 UserId 建立单用户归属，创建会话时须验证用户存在和创建权限。
 User 级记忆继续通过 UserId 归属关联，其构造校验不证明用户存在。
-UserId 已移至 Contracts/Users/Models，Memory 引用同步迁移，原有 JSON Value 结构保持不变。
+UserId 已移至 Contracts/Management/Users/Models，Memory 引用同步迁移，原有 JSON Value 结构保持不变。
 用户存储端口和具体实现后续定义，具体保存技术归 Infrastructure/Persistence。
 
 ---
@@ -483,7 +430,7 @@ exit
 
 Session Manager 负责多个 Agent Session 的生命周期。
 
-当前只定义契约，不实现管理器或存储。类型位于 Contracts/Sessions 的 Models 与 Operations 子目录，
+当前只定义契约，不实现管理器或存储。类型位于 Contracts/Management/Sessions 的 Models 与 Operations 子目录，
 创建请求位于 Operations/Requests；命名空间与目录对应，不为直接返回的会话数据创建额外响应包装。
 
 ### 7.1 `ISessionManager`
@@ -544,8 +491,8 @@ public enum SessionStatus
 }
 ```
 
-SessionId 位于 Contracts/Sessions/Models，显式构造拒绝空白并支持 JSON 反序列化。
-SessionInfo 是不可变 DTO，不保存取消源、执行 Task 或锁；本地执行句柄属于 Runtime/Orchestration。
+SessionId 位于 Contracts/Management/Sessions/Models，显式构造拒绝空白并支持 JSON 反序列化。
+SessionInfo 是不可变 DTO，不保存取消源、执行 Task 或锁；本地执行句柄属于 Runtime/Agent/Orchestration。
 CreatedAt 创建后不变，LastActiveAt 随实际输入或生命周期活动更新，不早于 CreatedAt 且不倒退。
 SessionInfo 的 UserId 创建后不变；JSON 缺少该字段时显式失败，旧数据需明确迁移，不自动补默认或当前用户。
 字段必需不等于用户有效，后续管理与恢复入口必须维护归属、权限、状态、任务关联和时间约束。
@@ -576,7 +523,7 @@ learning      Idle              -
 ### 7.4 Conversation 历史契约
 
 对话记录不放进 SessionInfo，也不直接把本轮 ModelMessage 当成存储模型。
-Contracts/Conversation 定义：
+Contracts/Agent/Capabilities/Conversation 定义：
 
 - MessageId：由可信调用方首次追加前生成，重试复用。
 - ConversationMessage：Id、SessionId、可空 TaskId、Sequence、Content 和 CreatedAt。
@@ -773,7 +720,7 @@ public interface IReactExecutor : IExecutionStrategy
 ## 10. Language Model Runtime
 
 LanguageModelRuntime 封装一次 LLM 调用，不处理业务控制流。
-当前已定义 Contracts/LanguageModels 的类型化消息与非流式调用契约，尚未实现 Provider 客户端。
+当前已定义 Contracts/Agent/LanguageModels 的类型化消息与非流式调用契约，尚未实现 Provider 客户端。
 流式、多模态和 Embedding 后续独立设计，不把规划接口当成已实现能力。
 
 ### 10.1 `ILanguageModelRuntime`
@@ -834,7 +781,7 @@ public sealed record ModelResponse(
     string? ProviderFinishReason = null);
 ```
 
-ToolCallRequest 已定义于 Contracts/Tools/Operations/Requests，包含 Id、ToolName 与 ArgumentsJson，
+ToolCallRequest 已定义于 Contracts/Agent/Capabilities/Tools/Operations/Requests，包含 Id、ToolName 与 ArgumentsJson，
 模型返回协议复用该类型，不再重复定义。Runtime 从可信任务上下文补充 SessionId 与 TaskId，
 构成 InvokeToolRequest 后执行工具；模型不能自行决定授权归属。
 
@@ -1035,7 +982,7 @@ public sealed record AgentState(
     long Version);
 ```
 
-生命周期复用 Contracts/Tasks/Models 的 TaskStatus，不另定义一套重复枚举。
+生命周期复用 Contracts/Management/Tasks/Models 的 TaskStatus，不另定义一套重复枚举。
 
 ### 12.3 State Transition
 
@@ -1076,11 +1023,11 @@ Memory 回答：
 
 当前 `HanyingAgent` 已定义两组 Memory 契约，尚未实现 Manager、Store 或索引构建流程。
 原有统一记忆接口已替换为 `IWorkingMemoryManager` 和 `ILongTermMemoryManager`。
-`SessionId`、`TaskId`、`UserId` 分别位于 `Contracts/Sessions/Models`、`Contracts/Tasks/Models` 和 `Contracts/Users/Models`，
+`SessionId`、`TaskId`、`UserId` 分别位于 `Contracts/Management/Sessions/Models`、`Contracts/Management/Tasks/Models` 和 `Contracts/Management/Users/Models`，
 Memory 契约分为 Models 和 Operations 两部分，操作输入与结果放在 Operations 的子目录：
 
 ```text
-Contracts/Memory
+Contracts/Agent/Capabilities/Memory
 ├── Models
 │   ├── MemoryItem.cs
 │   ├── MemoryId.cs
@@ -1101,8 +1048,8 @@ Contracts/Memory
         └── MemorySearchResult.cs
 ```
 
-命名空间与子目录对应：`HanyingAgent.Contracts.Memory.Models`、`HanyingAgent.Contracts.Memory.Operations`、
-`HanyingAgent.Contracts.Memory.Operations.Requests` 和 `HanyingAgent.Contracts.Memory.Operations.Responses`。
+命名空间与子目录对应：`HanyingAgent.Contracts.Agent.Capabilities.Memory.Models`、`HanyingAgent.Contracts.Agent.Capabilities.Memory.Operations`、
+`HanyingAgent.Contracts.Agent.Capabilities.Memory.Operations.Requests` 和 `HanyingAgent.Contracts.Agent.Capabilities.Memory.Operations.Responses`。
 Models 描述记忆本身；Operations 集中组织能力接口及其调用协议；
 Requests 描述操作输入，Responses 描述操作特有的结果。这些 DTO 是公共契约，不是某个接口的私有类型。
 MemoryId 即使作为参数、MemoryItem 即使作为返回值，也仍属于 Models。
@@ -1458,7 +1405,7 @@ incident / error / production
 ## 15. Tool Manager
 
 Tool Manager 负责工具注册、Schema 暴露、参数校验、执行和结果标准化。
-当前已定义 Contracts/Tools 公共协议，尚未实现工具管理器、注册表或具体工具。
+当前已定义 Contracts/Agent/Capabilities/Tools 公共协议，尚未实现工具管理器、注册表或具体工具。
 注册是本地启动组合职责，不放进公共调用接口；调用方等待本次调用并直接接收 Observation。
 
 ### 15.1 `IAgentTool`

@@ -6,7 +6,7 @@
 从简单 C++ 线程池的经验出发，建立业务任务与底层异步执行之间的对应关系。
 文中的状态机和回调示意用于理解机制，不是编译器生成代码的精确实现。
 
-代码入口：[LocalTaskManager.cs](../../HanyingAgent/SRC/Runtime/Tasks/LocalTaskManager.cs)。
+代码入口：[LocalTaskManager.cs](../../HanyingAgent/SRC/Runtime/Management/Tasks/LocalTaskManager.cs)。
 
 ## 一、先区分四个层次
 

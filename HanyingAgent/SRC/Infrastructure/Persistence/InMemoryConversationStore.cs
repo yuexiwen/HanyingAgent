@@ -1,11 +1,11 @@
 using System.Text;
 using System.Text.Json;
-using HanyingAgent.Capabilities.Conversation;
-using HanyingAgent.Contracts.Conversation.Models;
-using HanyingAgent.Contracts.Conversation.Operations.Requests;
-using HanyingAgent.Contracts.Conversation.Operations.Responses;
-using HanyingAgent.Contracts.Sessions.Models;
-using HanyingAgent.Contracts.Users.Models;
+using HanyingAgent.Runtime.Agent.Capabilities.Conversation;
+using HanyingAgent.Contracts.Agent.Capabilities.Conversation.Models;
+using HanyingAgent.Contracts.Agent.Capabilities.Conversation.Operations.Requests;
+using HanyingAgent.Contracts.Agent.Capabilities.Conversation.Operations.Responses;
+using HanyingAgent.Contracts.Management.Sessions.Models;
+using HanyingAgent.Contracts.Management.Users.Models;
 
 namespace HanyingAgent.Infrastructure.Persistence;
 

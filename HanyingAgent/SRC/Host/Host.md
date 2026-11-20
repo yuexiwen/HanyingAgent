@@ -9,19 +9,19 @@
 ## 当前实现
 
 - Console 交互按职责拆分，命令与输出行为不变：
-  - [ConsoleApplication](./ConsoleApplication.cs)：初始化、等待输入或结果、通知分派、错误与退出收尾。
+  - [ConsoleApplication](./Console/ConsoleApplication.cs)：初始化、等待输入或结果、通知分派、错误与退出收尾。
   - [ConsoleCommandHandler](./Console/ConsoleCommandHandler.cs)：解析参数、查询和发起操作，不直接修改业务状态。
   - [ConsoleRenderer](./Console/ConsoleRenderer.cs)：接收快照并输出，不查询 Store 或操作管理器。
   - [ConsoleState](./Console/ConsoleState.cs)：当前选择、最近任务、待展示、未读与已展示标记。
   三个 Console 专属组件位于 [Console](./Console/Console.md)，在每次 RunAsync 中创建并共享；
   不注册为全局共享状态，仍通过入口注入的 TextReader / TextWriter 使用同一输入输出通道。
-  [ConversationHistoryReader](../Capabilities/Conversation/ConversationHistoryReader.cs) 由 DI 注册，
+  [ConversationHistoryReader](../Runtime/Agent/Capabilities/Conversation/ConversationHistoryReader.cs) 由 DI 注册，
   在 Capabilities 的 Conversation 模块读取最近 N 轮或全部记录，与模型 Context 窗口及终端渲染分离。
 - [ApplicationHost](./ApplicationHost.cs) 统一注册配置、日志、记忆、Context、类型化 HTTP 模型客户端和执行器。
 - `/logs` 查询标准控制台日志开关，`/logs off` 屏蔽全部级别，`/logs on` 按原有配置恢复。
   通过 [ConsoleLogControl](./Console/ConsoleLogControl.cs) 和标准 LoggerFilterOptions 实现，
   不修改其他 Provider 或交互输出；开关为进程级、默认开启，不持久化。已排队日志可能仍会输出。
-- [ConsoleApplication](./ConsoleApplication.cs) 提交任务后立即显示 TaskId，并异步等待该任务的结果。
+- [ConsoleApplication](./Console/ConsoleApplication.cs) 提交任务后立即显示 TaskId，并异步等待该任务的结果。
   当前会话完成时自动展示回答、失败或取消；其他会话完成时显示带 SessionId / TaskId 的通知，
   不混入当前会话回答，切换回该会话后展示尚未阅读的更新。
   `/task` 保留显式查询，`/wait` 保留等待；已经展示的结果再次 `/wait` 只显示状态，重新查看正文用 `/task`。
@@ -86,6 +86,6 @@
 ## 设计边界
 
 显式命令不调用模型；Host 不拼接模型 Context、不执行记忆检索算法，也不推进 ReAct。
-Task 接受、会话占用、后台执行与收尾位于 [Tasks](../Runtime/Tasks/Tasks.md)；
-对话流程由 [Orchestration](../Runtime/Orchestration/Orchestration.md) 编排。
+Task 接受、会话占用、后台执行与收尾位于 [Tasks](../Runtime/Management/Tasks/Tasks.md)；
+对话流程由 [Orchestration](../Runtime/Agent/Orchestration/Orchestration.md) 编排。
 Host 只发起操作和管理进程生命周期。

@@ -1,6 +1,6 @@
-using HanyingAgent.Contracts.Sessions.Models;
-using HanyingAgent.Contracts.Tasks.Models;
-using HanyingAgent.Contracts.Tasks.Operations.Responses;
+using HanyingAgent.Contracts.Management.Sessions.Models;
+using HanyingAgent.Contracts.Management.Tasks.Models;
+using HanyingAgent.Contracts.Management.Tasks.Operations.Responses;
 
 namespace HanyingAgent.Host.Console;
 

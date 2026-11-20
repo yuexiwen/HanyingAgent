@@ -72,8 +72,8 @@ EventId 标识事件类型，日志 Category 标识来源组件，ExecutionId �
 SimpleConsole 自动显示数字编号，例如：
 
 ```text
-info: HanyingAgent.Runtime.Execution.DirectExecutor[1001] => ExecutionId:... Execution started
-warn: HanyingAgent.Runtime.Execution.DirectExecutor[1002] => ExecutionId:... Execution returned with Incomplete, ...
+info: HanyingAgent.Runtime.Agent.Execution.DirectExecutor[1001] => ExecutionId:... Execution started
+warn: HanyingAgent.Runtime.Agent.Execution.DirectExecutor[1002] => ExecutionId:... Execution returned with Incomplete, ...
 ```
 
 事件名作为 EventId.Name 提供给日志 Provider；当前 SimpleConsole 只在方括号里显示数字。

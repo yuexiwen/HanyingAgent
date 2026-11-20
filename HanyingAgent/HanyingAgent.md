@@ -26,6 +26,39 @@ Ollama 适配器实现 ILanguageModelRuntime，使用 HttpClient 调用原生 /a
 尚无 Agent 工具循环、等待用户或恢复。
 使用方式与限制见 [模型适配器](./SRC/Infrastructure/LanguageModels/LanguageModels.md)。
 
+## 目录与职责
+
+```text
+SRC
+├─ Contracts
+│  ├─ Management                 # Users / Sessions / Tasks
+│  └─ Agent
+│     ├─ Context
+│     ├─ Execution
+│     ├─ LanguageModels
+│     └─ Capabilities            # Conversation / Memory / Tools
+├─ Host
+│  ├─ Configuration
+│  └─ Console                    # 包含 ConsoleApplication
+├─ Runtime
+│  ├─ Management                 # 用户、会话、任务生命周期管理
+│  └─ Agent
+│     ├─ Orchestration           # Agent 工作流程编排
+│     ├─ Execution               # 执行策略
+│     ├─ Context                 # 统一预算、选择与组装
+│     └─ Capabilities            # Conversation / Memory / Skills / Tools
+├─ Infrastructure               # Provider、具体存储、可观测性
+└─ Diagnostics                  # 共享日志事件
+```
+
+2026-11-20 目录与命名空间同步迁移；单 Project、DI 生命周期、JSON 字段、命令和业务行为不变。
+入口适配负责接收用户操作，[Management](./SRC/Runtime/Management/Management.md) 管理一次运行，
+[Agent](./SRC/Runtime/Agent/Agent.md) 完成实际工作。控制面与数据面是职责视角，不是互斥的访问权限或存储边界。
+公共协议见 [Contracts](./SRC/Contracts/Contracts.md)；内部 Store 端口仍与所属模块放在一起，
+具体 Store 仍在 Infrastructure/Persistence。未创建 HTTP 入口、Skills 公共契约或独立服务。
+旧执行进度规划移至 Agent/Execution/State，不新增第二套 Task 状态机。
+测试按 Management、Agent、Host、Infrastructure 和 Support 分组。
+
 ## 本地运行
 
 先准备本地 Ollama 服务及模型，再从仓库根目录运行：
@@ -89,7 +122,7 @@ Context 按模型窗口扣除输出与安全余量，剩余额度默认分配给
 自动通知与命令通过单一输出循环显示，通知另起行并恢复输入提示；输入仍使用标准 ReadLine，
 保留正在等待的输入，但不实现完整输入行重绘。日志写入 stderr，仍可能与同一终端的交互交错。
 Delivered 且回复保存成功映射为 Completed；截断、未知、拒绝、过滤和不支持工具映射为 Failed，
-保留已有文本与明确原因。依赖超时是 Failed，不是 Cancelled。详细政策见 [Orchestration](./SRC/Runtime/Orchestration/Orchestration.md)。
+保留已有文本与明确原因。依赖超时是 Failed，不是 Cancelled。详细政策见 [Orchestration](./SRC/Runtime/Agent/Orchestration/Orchestration.md)。
 这是可信本地单用户模式，UserId 来自本地上下文；没有登录、多用户远程授权或跨进程任务锁。
 输入保存后调用失败会留下未回答的用户记录；回复保存失败明确报错，不自动重新调用模型。
 
@@ -113,7 +146,7 @@ Token 估算采用每 UTF-8 字节一个 Token，另加协议余量，并非精�
 Context 构造由编排器直接调用，使用 TaskId / SessionId 关联；
 后续执行器和模型日志额外携带 ExecutionId。
 默认不记录输入正文、系统指令、记忆正文或完整回复。日志级别可在 Logging:LogLevel 中设置。
-详细边界见 [Host](./SRC/Host/Host.md)、[Execution](./SRC/Runtime/Execution/Execution.md)
+详细边界见 [Host](./SRC/Host/Host.md)、[Execution](./SRC/Runtime/Agent/Execution/Execution.md)
 和[日志说明](./SRC/Infrastructure/Observability/Observability.md)。
 
 2026-11-11 本轮验收：全套 439 项测试通过、0 失败、0 跳过，构建警告按错误处理并通过。
@@ -142,9 +175,9 @@ Context 构造由编排器直接调用，使用 TaskId / SessionId 关联；
 - [HanyingAgent.csproj](./HanyingAgent.csproj) 定义项目构建，并排除 TEST 子树，防止测试源码混入应用。
 - [HanyingAgent.slnx](./HanyingAgent.slnx) 组织应用与测试项目，便于编辑器发现和统一构建。
 - [Program.cs](./Program.cs) 负责 Host 启停；[ApplicationHost](./SRC/Host/ApplicationHost.cs) 集中配置 DI、Options 与日志，不承载具体业务规则。
-- [ConsoleApplication](./SRC/Host/ConsoleApplication.cs) 保留交互协调入口；
+- [ConsoleApplication](./SRC/Host/Console/ConsoleApplication.cs) 保留交互协调入口；
   命令、渲染与界面状态拆至 [Host/Console](./SRC/Host/Console/Console.md)，
-  历史轮数读取由 [ConversationHistoryReader](./SRC/Capabilities/Conversation/ConversationHistoryReader.cs) 提供。
+  历史轮数读取由 [ConversationHistoryReader](./SRC/Runtime/Agent/Capabilities/Conversation/ConversationHistoryReader.cs) 提供。
 - bin、obj 是生成目录，不编写模块文档，也不作为业务模块维护。
 - 目录分组不等于微服务划分；业务模块通过契约协作，具体实现由入口组合。
 

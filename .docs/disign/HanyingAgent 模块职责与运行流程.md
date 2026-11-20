@@ -10,7 +10,7 @@ Memory、Tools、LanguageModels 和 Conversation 的主要契约；已实现内�
 Ollama 模型适配器，以及 Generic Host / DI、关联日志和 DirectExecutor 驱动的 Console。
 当前已实现可信本地单用户、内存 Session / Conversation 和有界多轮历史窗口；
 最小 Direct 任务编排已实现：后台运行、状态与结果查询、取消和 Session 原子占用；
-工具循环、等待用户与恢复流程仍待实现。具体当前范围见 [Orchestration](../../HanyingAgent/SRC/Runtime/Orchestration/Orchestration.md)。
+工具循环、等待用户与恢复流程仍待实现。具体当前范围见 [Orchestration](../../HanyingAgent/SRC/Runtime/Agent/Orchestration/Orchestration.md)。
 
 逻辑模块不等于独立进程或项目，Contracts 中的数据类型也不等于保存数据或执行业务的实现。
 项目入口见 [HanyingAgent](../../HanyingAgent/HanyingAgent.md)。
@@ -18,34 +18,45 @@ Ollama 模型适配器，以及 Generic Host / DI、关联日志和 DirectExecut
 ## 2. 总体划分
 
 ```text
-Host：用户交互
+Host：入口适配（当前 Console，未来可以是 REST API）
   ↓
-Runtime：会话与任务管理、执行流程、Context、执行状态
+Runtime/Management：身份、会话与 Task Lifecycle Flow
   ↓
-能力契约：User / Session / Task / Conversation / Memory / Tools / LanguageModels
-  ↓
-能力与技术实现：Conversation、Memory、Skills、Tools、模型适配、持久化、可观测性
+Runtime/Agent：Agent Execution Flow
+  ├─ Orchestration：平铺协调各模块
+  ├─ Execution：模型执行策略
+  ├─ Context：统一预算、选择与组装
+  └─ Capabilities：Conversation、Memory、Skills、Tools
+
+公共协议：Contracts/Management 与 Contracts/Agent
+技术适配：Infrastructure；共享日志事件：Diagnostics
 ```
 
 上图表达逻辑协作，不是所有接口必须经过同一个运行组件，也不表示每个业务能力都已有独立实现目录。
 模块之间传递明确的数据和操作请求，不把 Provider SDK、数据库连接或本地执行句柄暴露到公共 DTO。
+2026-11-20 实现、Contracts、命名空间和测试同步按以上职责分组，完整目录见
+[应用文档](../../HanyingAgent/HanyingAgent.md#目录与职责)。
+User、Session、Task 的身份、归属和状态主要属于 Control Plane Data；
+Conversation、Memory、Context、工具结果等主要属于 Data Plane Data。
+这是观察职责的两个视角，不是五个并列目录，也不限制 Console 通过业务接口查看历史或保存记忆。
 
 ### 2.1 模块职责总表
 
 | 模块 | 核心职责 | 不负责 |
 |---|---|---|
-| [User](../../HanyingAgent/SRC/Contracts/Users/Users.md) | 管理用户标识、显示名称和资料时间。 | 不管理所有用户关联数据，不等于认证或授权服务。 |
-| [Session](../../HanyingAgent/SRC/Contracts/Sessions/Sessions.md) | 管理会话身份、所属 UserId、生命周期和当前任务关联。 | 不保存完整历史，不负责界面，不携带执行句柄。 |
-| [Task](../../HanyingAgent/SRC/Contracts/Tasks/Tasks.md) | 定义一次工作的公共快照、结果和提交、查询、补充、取消协议。 | 不把每条消息都当作新任务，不独立维护另一套矛盾的执行状态。 |
-| [Conversation](../../HanyingAgent/SRC/Capabilities/Conversation/Conversation.md) | 在 Capabilities 中管理真实交互的追加、确定顺序、归属和历史读取，为 Runtime 提供数据。 | 不驱动执行流程，不渲染界面，不选择全部模型输入，不决定数据库技术。 |
-| [Memory](../../HanyingAgent/SRC/Capabilities/Memory/Memory.md) | 管理可复用语义信息的写入、修正、读取、检索、失效和遗忘。 | 不等于全部聊天历史，不管理当前执行步骤。 |
-| [Skills](../../HanyingAgent/SRC/Capabilities/Skills/Skills.md) | 提供任务方法、SOP、参考资料和选择线索。 | 不代替工具实现，也不直接推进任务控制流。 |
-| [Context](../../HanyingAgent/SRC/Runtime/Context/Context.md) | 为本轮模型调用选择、排序、压缩并组装消息和工具定义。 | 不管理来源数据的生命周期，不默认发送全部历史。 |
-| [Orchestration](../../HanyingAgent/SRC/Runtime/Orchestration/Orchestration.md) | 协调任务接受、会话占用、执行启动、等待、恢复、取消和收尾。 | 不实现每种任务内部策略或 Provider 协议。 |
-| [Execution / Executor](../../HanyingAgent/SRC/Runtime/Execution/Execution.md) | 按 Direct、Chain、ReAct 等策略推进任务内部步骤。 | 不直接实现模型 SDK、工具传输或数据库访问。 |
-| [State](../../HanyingAgent/SRC/Runtime/State/State.md) | 管理执行位置、步骤、迭代、待处理动作、状态转换和恢复进度。 | 不代替语义记忆，也不与 TaskInfo 各自维护矛盾事实。 |
-| [LanguageModels](../../HanyingAgent/SRC/Contracts/LanguageModels/LanguageModels.md) | 统一一次模型调用的消息、参数、文本、工具调用、结束原因和用量。 | 不执行工具，不召回记忆，不决定整个 Task 是否完成。 |
-| [Tools](../../HanyingAgent/SRC/Capabilities/Tools/Tools.md) | 校验并执行实际动作，统一工具定义、执行约束和 Observation。 | 不决定整个 Agent 的执行策略，不信任模型自行授予的权限。 |
+| [User](../../HanyingAgent/SRC/Contracts/Management/Users/Users.md) | 管理用户标识、显示名称和资料时间。 | 不管理所有用户关联数据，不等于认证或授权服务。 |
+| [Session](../../HanyingAgent/SRC/Contracts/Management/Sessions/Sessions.md) | 管理会话身份、所属 UserId、生命周期和当前任务关联。 | 不保存完整历史，不负责界面，不携带执行句柄。 |
+| [Task](../../HanyingAgent/SRC/Contracts/Management/Tasks/Tasks.md) | 定义一次工作的公共快照、结果和提交、查询、补充、取消协议。 | 不把每条消息都当作新任务，不独立维护另一套矛盾的执行状态。 |
+| [Conversation](../../HanyingAgent/SRC/Runtime/Agent/Capabilities/Conversation/Conversation.md) | 在 Capabilities 中管理真实交互的追加、确定顺序、归属和历史读取，为 Runtime 提供数据。 | 不驱动执行流程，不渲染界面，不选择全部模型输入，不决定数据库技术。 |
+| [Memory](../../HanyingAgent/SRC/Runtime/Agent/Capabilities/Memory/Memory.md) | 管理可复用语义信息的写入、修正、读取、检索、失效和遗忘。 | 不等于全部聊天历史，不管理当前执行步骤。 |
+| [Skills](../../HanyingAgent/SRC/Runtime/Agent/Capabilities/Skills/Skills.md) | 提供任务方法、SOP、参考资料和选择线索。 | 不代替工具实现，也不直接推进任务控制流。 |
+| [Context](../../HanyingAgent/SRC/Runtime/Agent/Context/Context.md) | 为本轮模型调用选择、排序、压缩并组装消息和工具定义。 | 不管理来源数据的生命周期，不默认发送全部历史。 |
+| [TaskManager](../../HanyingAgent/SRC/Runtime/Management/Tasks/Tasks.md) | 管理任务接受、会话占用、后台入口安排、查询、取消、结果保存和收尾。 | 不提供底层线程调度，不实现对话步骤或 Provider 协议。 |
+| [Orchestration](../../HanyingAgent/SRC/Runtime/Agent/Orchestration/Orchestration.md) | 编排输入保存、历史和记忆读取、Context 构建、模型执行和回复保存。 | 不承担业务 Task 生命周期、底层线程调度或 Provider 协议。 |
+| [Execution / Executor](../../HanyingAgent/SRC/Runtime/Agent/Execution/Execution.md) | 按 Direct、Chain、ReAct 等策略推进任务内部步骤。 | 不直接实现模型 SDK、工具传输或数据库访问。 |
+| [State](../../HanyingAgent/SRC/Runtime/Agent/Execution/State/State.md) | 管理执行位置、步骤、迭代、待处理动作、状态转换和恢复进度。 | 不代替语义记忆，也不与 TaskInfo 各自维护矛盾事实。 |
+| [LanguageModels](../../HanyingAgent/SRC/Contracts/Agent/LanguageModels/LanguageModels.md) | 统一一次模型调用的消息、参数、文本、工具调用、结束原因和用量。 | 不执行工具，不召回记忆，不决定整个 Task 是否完成。 |
+| [Tools](../../HanyingAgent/SRC/Runtime/Agent/Capabilities/Tools/Tools.md) | 校验并执行实际动作，统一工具定义、执行约束和 Observation。 | 不决定整个 Agent 的执行策略，不信任模型自行授予的权限。 |
 | [Host](../../HanyingAgent/SRC/Host/Host.md) | 接收输入、解析显式命令、选择会话、展示历史和结果。 | 不构造模型 Context，不推进 ReAct，不实现检索算法。 |
 | [Persistence](../../HanyingAgent/SRC/Infrastructure/Persistence/Persistence.md) | 实现用户、会话、任务、历史、记忆、状态、Checkpoint 和 Artifact 的具体存储。 | 不决定业务含义、任务策略或访问政策。 |
 | [Observability](../../HanyingAgent/SRC/Infrastructure/Observability/Observability.md) | 通过日志、事件、指标和追踪解释执行过程。 | 不成为任务状态或业务记录的另一套权威存储。 |
@@ -59,6 +70,9 @@ Runtime：会话与任务管理、执行流程、Context、执行状态
 - DTO 不携带锁、CancellationTokenSource、执行 Task、数据库连接或 Provider SDK 实例。
 - 方法中的 CancellationToken 控制本次调用或等待，不作为需要持久化的数据字段。
 - 本地和远程实现应保留相同业务语义，而不只是相同方法名称。
+- Management 分组定义 Users、Sessions、Tasks；Agent 分组定义 Context、Execution、LanguageModels 及 Capabilities。
+  Agent 协议引用 Management 的归属 ID 是正常关系，不要求两组完全隔离。
+- 内部 Store 端口继续与所属业务模块放在一起，不因目录调整公开到公共 Contracts。
 
 ## 3. 容易混淆的关系
 
@@ -128,11 +142,11 @@ Assistant 来自模型时保留结束原因，截断、过滤或拒绝即使没�
 
 调用方首次追加前生成稳定 MessageId，服务端分配会话内 Sequence 和 CreatedAt。
 同 ID、归属和内容的重试返回原记录，不同载荷报冲突；不能在超时重试时重新生成 ID。
-接口目前只定义这些语义，真正去重、并发顺序和存储仍未实现。
+当前内存实现已维护去重、并发顺序、归属校验和存储；磁盘持久化与远程一致性仍未实现。
 
 读取首次默认最近 20 条，页内 Sequence 升序，游标继续读取更早历史。
 Context 不直接把分页结果发送给模型：需要选择和转换内容，并补齐工具关联或舍弃整个相关片段。
-接口与具体约定见 [Conversation 契约](../../HanyingAgent/SRC/Contracts/Conversation/Conversation.md)。
+接口与具体约定见 [Conversation 契约](../../HanyingAgent/SRC/Contracts/Agent/Capabilities/Conversation/Conversation.md)。
 
 ## 4. 完整运行流程
 
@@ -183,17 +197,19 @@ SessionInfo.UserId，再按需要读取用户资料或用户级记忆。
 
 ### 4.4 接受新任务
 
-Orchestration 协调以下操作：
+Management/Tasks 的 TaskManager 与 Store 协调以下操作：
 
 1. 验证 Session 存在、未关闭且调用方有权限。
 2. 确认没有未结束任务。
 3. 创建任务记录，保存原始 Input、SessionId、状态、版本和时间。
 4. 将 Session 置为 Active 并关联 CurrentTaskId。
-5. 协调记录用户消息，并准备启动后台执行。
+5. 创建本进程 ExecutionHandle，通过 Task.Run 安排 RunAsync 后台入口并保存 Work 完成凭据。
+   后台入口再调用 Agent 的 DialogueOrchestrator，由它记录用户消息并执行对话流程。
 
 任务接收与会话占用必须一致，不能使用先 Get 再无条件启动的竞态流程。
 记录历史与启动执行也需要明确一致性和失败处理，不能报告接受成功却留下不可查询、无法推进的任务。
-具体事务、并发与恢复机制仍待实现，不假设独立远程调用天然具备原子性。
+当前内存 Store 用共享短锁维护任务创建与 Session 占用、终态保存与释放的一致性；
+跨进程事务与恢复仍待设计，不假设独立远程调用天然具备原子性。
 
 SubmitAsync 接受后返回 TaskInfo，不等待最终回答；返回快照时任务可能已经推进，不保证仍为 Created。
 忙时拒绝新工作，不排队；等待模型、工具和用户都属于未结束。
