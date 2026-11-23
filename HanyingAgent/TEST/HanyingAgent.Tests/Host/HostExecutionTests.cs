@@ -1,4 +1,5 @@
 using HanyingAgent.Host.Console;
+using HanyingAgent.Contracts.Agent.Context.Operations.Requests;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
@@ -180,7 +181,7 @@ public sealed class HostExecutionTests
     }
 
     [Fact]
-    public async Task ConcurrentDialogues_CorrelateFlatContextAndExecutionStagesBySession()
+    public async Task ConcurrentDialogues_CorrelateContextAndModelStagesWithinExecution()
     {
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var handler = new RecordingHandler(async (index, token) =>
@@ -211,13 +212,14 @@ public sealed class HostExecutionTests
         Assert.All(results, result => Assert.Equal(ExecutionConclusion.Delivered, result.Conclusion));
         var entries = logs.Entries.Where(entry => entry.EventId.Id is 2001 or 2002 or 1001 or 3001 or 3002 or 1002).ToArray();
         Assert.All(entries, entry => Assert.True(entry.Properties.ContainsKey("SessionId")));
+        Assert.All(entries, entry => Assert.True(entry.Properties.ContainsKey("ExecutionId")));
         var executions = entries.GroupBy(entry => entry.Properties["SessionId"]).ToArray();
         Assert.Equal(2, executions.Length);
         foreach (var execution in executions)
         {
             Assert.Equal(
-                new (int, string?)[] { (2001, "ContextBuildStarted"), (2002, "ContextBuildCompleted"),
-                    (1001, "ExecutionStarted"), (3001, "ModelInvocationStarted"),
+                new (int, string?)[] { (1001, "ExecutionStarted"),
+                    (2001, "ContextBuildStarted"), (2002, "ContextBuildCompleted"), (3001, "ModelInvocationStarted"),
                     (3002, "ModelInvocationReturned"), (1002, "ExecutionReturned") },
                 execution.Select(entry => (entry.EventId.Id, entry.EventId.Name)));
             Assert.Contains(execution, entry => entry.Category.EndsWith(".DirectExecutor", StringComparison.Ordinal));
@@ -234,7 +236,7 @@ public sealed class HostExecutionTests
     }
 
     [Fact]
-    public async Task Dialogue_ContextLimitFailureDoesNotInvokeExecutorAndLogsBuildContextPhaseOnce()
+    public async Task Dialogue_ContextLimitFailureDoesNotInvokeModelAndLogsExecutionFailureOnce()
     {
         var handler = new RecordingHandler();
         var logs = new RecordingLoggerProvider();
@@ -249,10 +251,11 @@ public sealed class HostExecutionTests
 
         Assert.Empty(handler.Requests);
         var failure = Assert.Single(logs.Entries, entry => entry.Level == LogLevel.Error);
-        Assert.Equal(4003, failure.EventId.Id);
-        Assert.Equal("DialogueFailed", failure.EventId.Name);
-        Assert.Equal("BuildContext", failure.Properties["Phase"]);
-        Assert.DoesNotContain(logs.Entries, entry => entry.EventId.Id == 1001);
+        Assert.Equal(1003, failure.EventId.Id);
+        Assert.Equal("ExecutionFailed", failure.EventId.Name);
+        Assert.True(failure.Properties.ContainsKey("ExecutionId"));
+        Assert.Single(logs.Entries, entry => entry.EventId.Id == 1001);
+        Assert.DoesNotContain(logs.Entries, entry => entry.EventId.Id == 4003);
         Assert.DoesNotContain(logs.Entries, entry => entry.Message.StartsWith("Execution returned", StringComparison.Ordinal));
     }
 
@@ -583,8 +586,8 @@ public sealed class HostExecutionTests
         return builder.Build();
     }
 
-    private static ModelInvocation Request() => new(
-        [new ModelSystemMessage("system"), new ModelUserMessage("private-input")], []);
+    private static BuildContextRequest Request() => new(
+        "system", [new ModelUserMessage("private-input")], []);
 
     private static HttpResponseMessage Response(string text = "private-answer", string reason = "stop") => new(HttpStatusCode.OK)
     {

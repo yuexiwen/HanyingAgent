@@ -1,6 +1,5 @@
 using System.Text.Json;
 using HanyingAgent.Contracts.Agent.Context.Operations.Requests;
-using HanyingAgent.Contracts.Agent.Context.Operations;
 using HanyingAgent.Contracts.Agent.Capabilities.Conversation.Models;
 using HanyingAgent.Contracts.Agent.Capabilities.Conversation.Operations;
 using HanyingAgent.Contracts.Agent.Capabilities.Conversation.Operations.Requests;
@@ -14,7 +13,6 @@ using HanyingAgent.Contracts.Agent.Capabilities.Memory.Models;
 using HanyingAgent.Contracts.Agent.Capabilities.Memory.Operations;
 using HanyingAgent.Contracts.Agent.Capabilities.Memory.Operations.Requests;
 using HanyingAgent.Contracts.Agent.LanguageModels.Models;
-using HanyingAgent.Contracts.Agent.LanguageModels.Operations.Requests;
 using HanyingAgent.Contracts.Management.Sessions.Models;
 using HanyingAgent.Runtime.Management.Users;
 using Microsoft.Extensions.Logging;
@@ -26,7 +24,6 @@ public sealed class DialogueOrchestrator(
     IConversationManager conversations,
     ConversationWindow window,
     IWorkingMemoryManager memory,
-    IContextBuilder contextBuilder,
     DirectExecutor executor,
     LocalUserContext identity,
     ILogger<DialogueOrchestrator> logger)
@@ -56,12 +53,10 @@ public sealed class DialogueOrchestrator(
             var messages = await SelectHistoryAsync(current, request, cancellationToken);
             phase = "ReadMemory";
             var memories = await ReadMemoryAsync(cancellationToken);
-            phase = "BuildContext";
-            var invocation = await BuildContextAsync(request, messages, memories, cancellationToken);
-            phase = "WaitForModel";
-            NotifyWaitingForModel(waitingForModel, cancellationToken);
             phase = "Execute";
-            var outcome = await executor.ExecuteAsync(invocation, cancellationToken);
+            var outcome = await executor.ExecuteAsync(new BuildContextRequest(
+                request.SystemInstruction, messages, memories, request.Options, request.MaxInputCharacters),
+                cancellationToken, waitingForModel);
             phase = "SaveAssistant";
             await SaveAssistantAsync(sessionId, taskId, outcome, cancellationToken);
             return outcome;
@@ -108,22 +103,6 @@ public sealed class DialogueOrchestrator(
             throw new InvalidOperationException("Working memory returned invalid data or a different owner.");
         }
         return memories;
-    }
-
-    private async Task<ModelInvocation> BuildContextAsync(
-        DialogueRequest request, IReadOnlyList<ModelMessage> messages,
-        IReadOnlyList<MemoryItem> memories, CancellationToken cancellationToken)
-    {
-        var invocation = await contextBuilder.BuildAsync(new BuildContextRequest(
-            request.SystemInstruction, messages, memories, request.Options, request.MaxInputCharacters), cancellationToken);
-        cancellationToken.ThrowIfCancellationRequested();
-        return invocation;
-    }
-
-    private static void NotifyWaitingForModel(Action? waitingForModel, CancellationToken cancellationToken)
-    {
-        waitingForModel?.Invoke();
-        cancellationToken.ThrowIfCancellationRequested();
     }
 
     private async Task SaveAssistantAsync(

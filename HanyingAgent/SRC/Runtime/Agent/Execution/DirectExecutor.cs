@@ -1,9 +1,10 @@
 using System.Diagnostics;
 using System.Text.Json;
+using HanyingAgent.Contracts.Agent.Context.Operations;
+using HanyingAgent.Contracts.Agent.Context.Operations.Requests;
 using HanyingAgent.Contracts.Agent.Execution.Models;
 using HanyingAgent.Contracts.Agent.LanguageModels.Models;
 using HanyingAgent.Contracts.Agent.LanguageModels.Operations;
-using HanyingAgent.Contracts.Agent.LanguageModels.Operations.Requests;
 using HanyingAgent.Contracts.Agent.LanguageModels.Operations.Responses;
 using HanyingAgent.Diagnostics;
 using Microsoft.Extensions.Logging;
@@ -12,29 +13,38 @@ namespace HanyingAgent.Runtime.Agent.Execution;
 
 public sealed class DirectExecutor
 {
+    private readonly IContextBuilder _contextBuilder;
     private readonly ILanguageModelRuntime _model;
     private readonly ILogger<DirectExecutor> _logger;
 
     public DirectExecutor(
+        IContextBuilder contextBuilder,
         ILanguageModelRuntime model,
         ILogger<DirectExecutor> logger)
     {
+        ArgumentNullException.ThrowIfNull(contextBuilder);
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(logger);
+        _contextBuilder = contextBuilder;
         _model = model;
         _logger = logger;
     }
 
     public async Task<ExecutionOutcome> ExecuteAsync(
-        ModelInvocation invocation,
-        CancellationToken cancellationToken)
+        BuildContextRequest request,
+        CancellationToken cancellationToken,
+        Action? waitingForModel = null)
     {
-        ArgumentNullException.ThrowIfNull(invocation);
+        ArgumentNullException.ThrowIfNull(request);
         using var scope = _logger.BeginScope("ExecutionId:{ExecutionId}", Guid.NewGuid().ToString("N"));
         var started = Stopwatch.GetTimestamp();
         _logger.LogInformation(LogEvents.ExecutionStarted, "Execution started");
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            var invocation = await _contextBuilder.BuildAsync(request, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            waitingForModel?.Invoke();
             cancellationToken.ThrowIfCancellationRequested();
             var response = await _model.InvokeAsync(invocation, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
@@ -60,7 +70,8 @@ public sealed class DirectExecutor
             throw;
         }
         catch (Exception exception) when (exception is HttpRequestException or JsonException or
-            ArgumentException or InvalidOperationException or NotSupportedException)
+            ArgumentException or InvalidOperationException or NotSupportedException or IOException or
+            KeyNotFoundException or UnauthorizedAccessException)
         {
             _logger.LogError(LogEvents.ExecutionFailed, exception, "Execution failed after {ElapsedMs} ms",
                 Stopwatch.GetElapsedTime(started).TotalMilliseconds);

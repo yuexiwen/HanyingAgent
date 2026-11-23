@@ -134,9 +134,18 @@ public sealed class DialogueTests
         Assert.Equal(1, memory.Calls);
         Assert.Equal(stage == "memory" ? 0 : 1, context.Calls);
         Assert.Empty(model.Invocations);
-        Assert.DoesNotContain(fixture.Logs.Entries, entry => entry.EventId.Id == 1001);
-        var failure = Assert.Single(fixture.Logs.Entries, entry => entry.EventId.Id == (cancelled ? 4004 : 4003));
-        Assert.Equal(stage == "memory" ? "ReadMemory" : "BuildContext", failure.Properties["Phase"]);
+        if (stage == "memory")
+        {
+            Assert.DoesNotContain(fixture.Logs.Entries, entry => entry.EventId.Id == 1001);
+            var failure = Assert.Single(fixture.Logs.Entries, entry => entry.EventId.Id == (cancelled ? 4004 : 4003));
+            Assert.Equal("ReadMemory", failure.Properties["Phase"]);
+        }
+        else
+        {
+            Assert.Single(fixture.Logs.Entries, entry => entry.EventId.Id == 1001);
+            Assert.Single(fixture.Logs.Entries, entry => entry.EventId.Id == (cancelled ? 1005 : 1003));
+            Assert.DoesNotContain(fixture.Logs.Entries, entry => entry.EventId.Id is 4003 or 4004);
+        }
         Assert.Equal(SessionStatus.Idle, (await fixture.Sessions.GetAsync(session.Id, CancellationToken.None))!.Status);
     }
 
