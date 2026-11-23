@@ -15,8 +15,9 @@
 Management/Tasks
   → Orchestration
       → Conversation / Memory：读取或保存数据
-      → Context：选择与组装
-      → Execution：调用模型并解释响应
+      → Execution：推进完整执行策略
+          → Context：选择与组装模型输入
+          → 模型：推理并返回响应
 ```
 
 Capabilities 不只是数据结构：Tools 也包含执行能力，Memory 包含管理规则。
@@ -25,4 +26,7 @@ Contracts 不引用本目录的实现，Provider 客户端及具体 Store 仍由
 公共协议见 [Contracts/Agent](../../Contracts/Agent/Agent.md)。
 
 当前没有 ReAct 工具循环、自动记忆提取或长期整合；
+Orchestration 获取初始历史和记忆快照，Execution 从第一轮开始调用 ContextBuilder。
+未来多轮策略可追加本次任务的执行记录后重建 Context，不默认每轮重新读取历史与 Memory；
+构造算法仍由 Context 模块维护，不在执行器中复制。
 Execution 下的 [State](./Execution/State/State.md) 仅保留未来执行进度规划，不新增状态机。

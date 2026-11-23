@@ -37,7 +37,8 @@ public sealed class DirectExecutorTests
         var model = new StubModel((_, _) => Task.FromResult(response));
         using var logs = new RecordingLoggerProvider();
         using var factory = LoggerFactory.Create(builder => builder.AddProvider(logs));
-        var executor = new DirectExecutor(model, factory.CreateLogger<DirectExecutor>());
+        var context = new StubContext();
+        var executor = new DirectExecutor(context, model, factory.CreateLogger<DirectExecutor>());
         var request = Request();
         using var cancellation = new CancellationTokenSource();
 
@@ -48,7 +49,9 @@ public sealed class DirectExecutorTests
         Assert.Equal(reason, outcome.FinishReason);
         Assert.Same(response.Usage, outcome.Usage);
         Assert.Equal(response.ProviderFinishReason, outcome.ProviderFinishReason);
-        Assert.Same(request, model.Invocation);
+        Assert.Same(context.Invocation, model.Invocation);
+        Assert.Same(request, context.Request);
+        Assert.Equal(cancellation.Token, context.Token);
         Assert.Equal(cancellation.Token, model.Token);
         Assert.Equal(1, model.Calls);
         var returned = Assert.Single(logs.Entries,
@@ -97,7 +100,7 @@ public sealed class DirectExecutorTests
         var model = new StubModel((_, _) => Task.FromResult(response));
         using var logs = new RecordingLoggerProvider();
         using var factory = LoggerFactory.Create(builder => builder.AddProvider(logs));
-        var executor = new DirectExecutor(model, factory.CreateLogger<DirectExecutor>());
+        var executor = new DirectExecutor(new StubContext(), model, factory.CreateLogger<DirectExecutor>());
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync(Request(), CancellationToken.None));
 
@@ -181,18 +184,48 @@ public sealed class DirectExecutorTests
         }
     }
 
-    private static DirectExecutor CreateExecutor(ILanguageModelRuntime model) =>
-        new(model, Microsoft.Extensions.Logging.Abstractions.NullLogger<DirectExecutor>.Instance);
+    [Fact]
+    public async Task ExecuteAsync_NotifiesAfterContextBuildAndCancellationPreventsModelCall()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var context = new StubContext();
+        var model = new StubModel((_, _) => Task.FromResult(new ModelResponse("answer", [], ModelFinishReason.Stop)));
+        var executor = new DirectExecutor(context, model,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<DirectExecutor>.Instance);
+        var request = Request();
+        var notified = false;
 
-    private static ModelInvocation Request() =>
-        new([new ModelSystemMessage("system"), new ModelUserMessage("input")], []);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            executor.ExecuteAsync(request, cancellation.Token, () =>
+            {
+                Assert.Same(request, context.Request);
+                Assert.Equal(0, model.Calls);
+                notified = true;
+                cancellation.Cancel();
+            }));
+
+        Assert.True(notified);
+        Assert.Equal(0, model.Calls);
+    }
+
+    private static DirectExecutor CreateExecutor(ILanguageModelRuntime model) =>
+        new(new StubContext(), model, Microsoft.Extensions.Logging.Abstractions.NullLogger<DirectExecutor>.Instance);
+
+    private static BuildContextRequest Request() =>
+        new("system", [new ModelUserMessage("input")], []);
 
     private sealed class StubContext : IContextBuilder
     {
         public ModelInvocation Invocation { get; } = new([new ModelUserMessage("assembled")], []);
+        public BuildContextRequest? Request { get; private set; }
+        public CancellationToken Token { get; private set; }
 
-        public Task<ModelInvocation> BuildAsync(BuildContextRequest request, CancellationToken cancellationToken) =>
-            Task.FromResult(Invocation);
+        public Task<ModelInvocation> BuildAsync(BuildContextRequest request, CancellationToken cancellationToken)
+        {
+            Request = request;
+            Token = cancellationToken;
+            return Task.FromResult(Invocation);
+        }
     }
 
     private sealed class StubModel(
