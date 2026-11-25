@@ -4,7 +4,8 @@
 
 定义工具能力的公共描述、调用归属和结果协议，使 Runtime 不依赖具体工具实例或传输方式。
 
-当前已定义契约，没有 ToolManager、Registry、具体工具或远程适配器实现。
+当前已定义契约，并提供 [LocalToolManager 与 UTC 时间工具](../../../../Runtime/Agent/Capabilities/Tools/Tools.md)；
+尚未接入模型工具循环或实现远程适配器。
 
 ## 直属子模块
 
@@ -32,4 +33,5 @@ InvokeAsync 等待本次调用结束或获得明确的未知结果，不提供�
 - 本地工具实例注册属于启动组合，不放入公共 IToolManager；业务协调在 Runtime/Agent/Capabilities/Tools。
 - HasSideEffects 是风险描述，不是权限或幂等性承诺；有副作用的调用不能因超时盲目重试。
 - 方法 CancellationToken 取消调用或等待，不证明远端工具已停止，也不取消所属 Task。
-- DTO 只定义数据；归属、权限、Schema、超时、调用去重和输出限制仍待实现。
+- DTO 只定义数据；本地入口实现归属、活动状态、重复调用和内联输出限制，具体工具负责参数 Schema 校验。
+- 本地超时采用协作式取消；细粒度任务工具策略、通用 Schema 引擎、Artifact 和持久化调用记录尚未实现。

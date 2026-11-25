@@ -1,4 +1,7 @@
 using HanyingAgent.Runtime.Agent.Capabilities.Memory;
+using HanyingAgent.Runtime.Agent.Capabilities.Tools;
+using HanyingAgent.Runtime.Agent.Capabilities.Tools.Implementations;
+using HanyingAgent.Contracts.Agent.Capabilities.Tools.Operations;
 using HanyingAgent.Contracts.Agent.Context.Operations;
 using HanyingAgent.Contracts.Agent.LanguageModels.Operations;
 using HanyingAgent.Contracts.Agent.Capabilities.Memory.Operations;
@@ -81,6 +84,8 @@ public static class ApplicationHost
             .ValidateOnStart();
 
         builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
+        builder.Services.AddSingleton<ILocalTool, GetCurrentTimeTool>();
+        builder.Services.AddSingleton<IToolManager, LocalToolManager>();
         builder.Services.AddSingleton<IWorkingMemoryStore, InMemoryWorkingMemoryStore>();
         builder.Services.AddSingleton<IWorkingMemoryManager, LocalWorkingMemoryManager>();
         builder.Services.AddSingleton<IModelTokenCounter>(services =>
@@ -138,6 +143,19 @@ public static class ApplicationHost
         builder.Services.AddSingleton<TextReader>(System.Console.In);
         builder.Services.AddSingleton<TextWriter>(System.Console.Out);
         builder.Services.AddSingleton<ConsoleApplication>();
+        builder.Services.AddHostedService<ToolRegistrationValidator>();
         return builder;
+    }
+
+    private sealed class ToolRegistrationValidator(IToolManager tools) : IHostedService
+    {
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+            _ = tools;
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.CompletedTask;
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }
