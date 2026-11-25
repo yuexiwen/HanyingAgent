@@ -28,7 +28,10 @@
 - 未知工具、参数不符合 Schema、归属不匹配或权限不足显式报错，不自动换工具或返回成功。
 - ToolCallId 在应用实例内关联一次调用，必须保持请求与 Observation 一致。
 - 同一 Call ID 不同归属、工具或参数显式报冲突；重复同一请求只能复用已知结果或显式拒绝，不能盲目再次执行。
-- 相关调用记录、Schema 校验、权限和重复处理均尚未实现。
+- 当前本地实现检查任务用户归属、Session 匹配与活动状态；已注册工具均允许活动任务调用。
+  AllowedTools 只是本次发现过滤，不构成后续执行授权；更细的任务策略尚未实现。
+- 本地 Manager 在实例生命周期内保留已开始的 Call ID，所有重复调用显式拒绝，不跨重启。
+- 通用入口校验 JSON 对象，具体工具执行前校验自身 Schema；未引入通用 JSON Schema 引擎。
 
 ## 取消与未知结果
 
@@ -37,5 +40,5 @@ CancellationToken 控制本次调用或等待，允许显式抛出取消异常�
 或在无法返回 Observation 时显式抛出调用异常，不将未知结果包装成成功或确定失败。
 Failed 与 Cancelled 均不承诺撤销副作用，调用方不可据此自动重试。
 
-ToolResult 是后续具体工具协议可复用的结果 DTO；当前公开 InvokeAsync 返回 ToolObservation，
-不直接把无限大的原始结果暴露给 Agent。
+ToolResult 由本地工具实现返回；当前公开 InvokeAsync 返回 ToolObservation，
+本地实现对 Content 与 Error 设置合计 8192 字符上限，超限显式失败，Artifact 支持仍待实现。

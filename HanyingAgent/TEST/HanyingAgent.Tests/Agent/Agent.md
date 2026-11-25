@@ -8,6 +8,7 @@
 | [Execution](./Execution/DirectExecutorTests.cs) | DirectExecutor 的模型调用、响应解释和异常语义。 |
 | [Context](./Context/Context.md) | 上下文校验、组装、统一预算与份额策略。 |
 | [Capabilities/Memory](./Capabilities/Memory/Memory.md) | 记忆契约、Manager 规则与真实 Manager + Store 组合。 |
+| [Capabilities/Tools](./Capabilities/Tools/LocalToolManagerTests.cs) | 时间工具、扩展注册、归属、调用去重、取消、未知结果及输出限制。 |
 
 内存 Store 单元测试移至 Infrastructure/Persistence，Console 与 Host 入口测试移至 Host。
 已有 DialogueTests 包含归属、历史和交互集成测试，本次不为机械镜像目录而拆分测试方法。
