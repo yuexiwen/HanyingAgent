@@ -27,6 +27,10 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Console;
 using Microsoft.Extensions.Options;
 using HanyingAgent.Host.Console;
+using HanyingAgent.Contracts.Agent.Capabilities.Skills.Operations;
+using HanyingAgent.Runtime.Agent.Capabilities.Skills;
+using HanyingAgent.Contracts.Agent.Capabilities.Prompts.Operations;
+using HanyingAgent.Runtime.Agent.Capabilities.Prompts;
 
 namespace HanyingAgent.Host;
 
@@ -85,6 +89,43 @@ public static class ApplicationHost
             .ValidateOnStart();
 
         builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
+        builder.Services.AddOptions<SkillSettings>()
+            .Bind(builder.Configuration.GetSection(SkillSettings.SectionName))
+            .Validate(settings => settings.Directory is null || !string.IsNullOrWhiteSpace(settings.Directory),
+                "Skills:Directory must be null or a nonblank path.")
+            .Validate(settings => settings.MaxFileBytes > 0 && settings.MaxFileBytes < int.MaxValue,
+                "Skills:MaxFileBytes must be positive and less than Int32.MaxValue.")
+            .Validate(settings => settings.MaxSkillCount > 0, "Skills:MaxSkillCount must be positive.")
+            .ValidateOnStart();
+        builder.Services.AddSingleton(services =>
+        {
+            var settings = services.GetRequiredService<IOptions<SkillSettings>>().Value;
+            var directory = settings.Directory is null ? null :
+                Path.GetFullPath(settings.Directory, builder.Environment.ContentRootPath);
+            return new LocalSkillManager(directory, settings.MaxFileBytes, settings.MaxSkillCount,
+                services.GetRequiredService<ILogger<LocalSkillManager>>());
+        });
+        builder.Services.AddSingleton<ISkillManager>(services => services.GetRequiredService<LocalSkillManager>());
+        builder.Services.AddHostedService<SkillInitializationService>();
+        builder.Services.AddOptions<PromptSettings>()
+            .Bind(builder.Configuration.GetSection(PromptSettings.SectionName))
+            .Validate(settings => settings.Directory is null || !string.IsNullOrWhiteSpace(settings.Directory),
+                "Prompts:Directory must be null or a nonblank path.")
+            .Validate(settings => settings.MaxFileBytes > 0 && settings.MaxFileBytes < int.MaxValue,
+                "Prompts:MaxFileBytes must be positive and less than Int32.MaxValue.")
+            .Validate(settings => settings.MaxPromptCount > 0, "Prompts:MaxPromptCount must be positive.")
+            .Validate(settings => settings.MaxOutputCharacters > 0, "Prompts:MaxOutputCharacters must be positive.")
+            .ValidateOnStart();
+        builder.Services.AddSingleton(services =>
+        {
+            var settings = services.GetRequiredService<IOptions<PromptSettings>>().Value;
+            var directory = settings.Directory is null ? null :
+                Path.GetFullPath(settings.Directory, builder.Environment.ContentRootPath);
+            return new LocalPromptManager(directory, settings.MaxFileBytes, settings.MaxPromptCount,
+                settings.MaxOutputCharacters, services.GetRequiredService<ILogger<LocalPromptManager>>());
+        });
+        builder.Services.AddSingleton<IPromptManager>(services => services.GetRequiredService<LocalPromptManager>());
+        builder.Services.AddHostedService<PromptInitializationService>();
         builder.Services.AddOptions<McpSettings>()
             .Bind(builder.Configuration.GetSection(McpSettings.SectionName));
         builder.Services.AddSingleton<McpConnectionManager>();
@@ -151,6 +192,20 @@ public static class ApplicationHost
         builder.Services.AddSingleton<ConsoleApplication>();
         builder.Services.AddHostedService<ToolRegistrationValidator>();
         return builder;
+    }
+
+    private sealed class PromptInitializationService(LocalPromptManager prompts) : IHostedService
+    {
+        public Task StartAsync(CancellationToken cancellationToken) => prompts.InitializeAsync(cancellationToken);
+
+        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    private sealed class SkillInitializationService(LocalSkillManager skills) : IHostedService
+    {
+        public Task StartAsync(CancellationToken cancellationToken) => skills.InitializeAsync(cancellationToken);
+
+        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
     private sealed class ToolRegistrationValidator(IToolManager tools) : IHostedService

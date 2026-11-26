@@ -9,6 +9,8 @@
 | [Context](./Context/Context.md) | 上下文校验、组装、统一预算与份额策略。 |
 | [Capabilities/Memory](./Capabilities/Memory/Memory.md) | 记忆契约、Manager 规则与真实 Manager + Store 组合。 |
 | [Capabilities/Tools](./Capabilities/Tools/LocalToolManagerTests.cs) | 时间工具、扩展注册、归属、调用去重、取消、未知结果及输出限制。 |
+| [Capabilities/Skills](./Capabilities/Skills/LocalSkillManagerTests.cs) | Skill 发现与加载、格式校验、快照、大小与数量边界、链接拒绝和 Host 初始化。 |
+| [Capabilities/Prompts](./Capabilities/Prompts/LocalPromptManagerTests.cs) | 模板发现、参数校验与字面值替换、快照、文件及输出边界和 Host 初始化。 |
 
 内存 Store 单元测试移至 Infrastructure/Persistence，Console 与 Host 入口测试移至 Host。
 已有 DialogueTests 包含归属、历史和交互集成测试，本次不为机械镜像目录而拆分测试方法。

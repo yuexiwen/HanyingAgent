@@ -13,6 +13,10 @@ Console 已通过 `/remember TEXT` 接入显式 User 级工作记忆写入，并
 数据不持久化，自动提取与评分、身份授权、容量治理和长期记忆仍未实现。
 已增加独立的 [stdio MCP 接入层](./SRC/Infrastructure/Mcp/Mcp.md)，提供固定 Server 配置、
 按 Server 复用连接的统一工具发现与调用入口；尚未接入 Agent 工具循环。
+已增加独立的 [本地 Skill 模块](./SRC/Runtime/Agent/Capabilities/Skills/Skills.md)，
+启动时校验 SKILL.md 并建立快照，提供名称与描述发现和按名称加载正文；尚未接入 Agent 或 Context。
+独立的 [本地 Prompt 模块](./SRC/Runtime/Agent/Capabilities/Prompts/Prompts.md)
+提供参数定义发现与 `{{name}}` 文本渲染，不依赖 Skill，不调用模型，也不替换现有系统指令。
 
 Context 五步最小版已完成：接口、纯文本请求组装、明确归属的工作记忆接入、总输入字符上限和真实组件组合验收，
 共 57 项独立测试与 20 项真实组合测试通过（历史验收数量）。
@@ -148,6 +152,18 @@ Token 估算采用每 UTF-8 字节一个 Token，另加协议余量，并非精�
 Stdio.Command / Arguments、可选 WorkingDirectory / Environment 与连接及请求超时；
 Host 启动只校验配置，第一次工具发现或调用才启动可信 Server。
 完整示例、调用方式和生命周期边界见 [MCP](./SRC/Infrastructure/Mcp/Mcp.md)。
+
+`Skills.Directory` 默认 null，不读取外部 Skill 文件。指定目录后，每个直属子目录必须包含
+带 name / description YAML 头部和非空正文的 UTF-8 SKILL.md，目录名与 name 必须相同。
+相对路径按应用 ContentRootPath 解析；文件不会自动复制到输出目录，修改后重启生效。
+默认单文件最多 65,536 字节、最多 100 个 Skill；非法格式、超限或链接路径使启动失败。
+格式、信任边界与加载接口见 [Skills](./SRC/Runtime/Agent/Capabilities/Skills/Skills.md)。
+
+`Prompts.Directory` 默认 null。配置后，每个直属子目录提供带 name / description /
+arguments YAML 头部的 UTF-8 PROMPT.md；正文使用 `{{name}}` 占位符。
+默认单文件最多 65,536 字节、最多 100 个模板、渲染结果最多 65,536 个 UTF-16 字符单元。
+模板启动时完整校验并建立快照，修改后重启生效；参数必填，额外参数和超限结果明确拒绝。
+文件示例、调用方式和内容信任边界见 [Prompts](./SRC/Runtime/Agent/Capabilities/Prompts/Prompts.md)。
 
 日志写入标准错误，交互与回答写入标准输出；任务流程关联 TaskId 和 SessionId，
 Context 构造由编排器直接调用，使用 TaskId / SessionId 关联；
