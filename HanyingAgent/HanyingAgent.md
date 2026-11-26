@@ -11,6 +11,8 @@ WorkingMemory 已建立内部存储端口、正式 xUnit 测试项目、测试�
 五步现已完成，内存版 WorkingMemory MVP 此前已通过统一验收：252 个正式测试全部通过，构建 0 警告、0 错误。
 Console 已通过 `/remember TEXT` 接入显式 User 级工作记忆写入，并在同一用户的后续对话中跨会话读取。
 数据不持久化，自动提取与评分、身份授权、容量治理和长期记忆仍未实现。
+已增加独立的 [stdio MCP 接入层](./SRC/Infrastructure/Mcp/Mcp.md)，提供固定 Server 配置、
+按 Server 复用连接的统一工具发现与调用入口；尚未接入 Agent 工具循环。
 
 Context 五步最小版已完成：接口、纯文本请求组装、明确归属的工作记忆接入、总输入字符上限和真实组件组合验收，
 共 57 项独立测试与 20 项真实组合测试通过（历史验收数量）。
@@ -141,6 +143,11 @@ HistoryBudgetPercent（1–99，默认 75）、TokenSafetyMargin（非负，默�
 Token 估算采用每 UTF-8 字节一个 Token，另加协议余量，并非精确 tokenizer，也不保证任意模型模板都不会超限。
 输出预留与安全余量之和必须小于配置的模型窗口；未指定输出上限时在最终请求补齐配置默认值。
 请求指定未配置预算的其他模型时明确拒绝；字符上限仍是独立的额外保护，不自动生成摘要。
+
+`Mcp.Servers` 默认是空列表，不启动外部进程。注册 Server 时配置唯一 Name、
+Stdio.Command / Arguments、可选 WorkingDirectory / Environment 与连接及请求超时；
+Host 启动只校验配置，第一次工具发现或调用才启动可信 Server。
+完整示例、调用方式和生命周期边界见 [MCP](./SRC/Infrastructure/Mcp/Mcp.md)。
 
 日志写入标准错误，交互与回答写入标准输出；任务流程关联 TaskId 和 SessionId，
 Context 构造由编排器直接调用，使用 TaskId / SessionId 关联；

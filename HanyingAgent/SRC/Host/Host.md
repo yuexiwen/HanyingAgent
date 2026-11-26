@@ -18,6 +18,8 @@
   [ConversationHistoryReader](../Runtime/Agent/Capabilities/Conversation/ConversationHistoryReader.cs) 由 DI 注册，
   在 Capabilities 的 Conversation 模块读取最近 N 轮或全部记录，与模型 Context 窗口及终端渲染分离。
 - [ApplicationHost](./ApplicationHost.cs) 统一注册配置、日志、记忆、Context、类型化 HTTP 模型客户端和执行器。
+- Host 同时注册独立的 [MCP 接入层](../Infrastructure/Mcp/Mcp.md)，启动时校验 `Mcp.Servers`，
+  按需建立 stdio 连接，退出时清理进程。默认列表为空；尚未接入 Agent 或 Console 工具命令。
 - `/logs` 查询标准控制台日志开关，`/logs off` 屏蔽全部级别，`/logs on` 按原有配置恢复。
   通过 [ConsoleLogControl](./Console/ConsoleLogControl.cs) 和标准 LoggerFilterOptions 实现，
   不修改其他 Provider 或交互输出；开关为进程级、默认开启，不持久化。已排队日志可能仍会输出。

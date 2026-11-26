@@ -4,7 +4,8 @@
 
 提供与技术平台有关的具体实现，使 Runtime 与能力业务规则不依赖某个 Provider、数据库或传输协议。
 
-当前 Persistence 已实现工作记忆的进程内存 Store，LanguageModels 已实现 Ollama 纯文本非流式 HTTP 适配器；
+当前 Persistence 已实现工作记忆的进程内存 Store，LanguageModels 已实现 Ollama 纯文本非流式 HTTP 适配器，
+Mcp 已实现独立的 stdio Server 配置和统一工具访问入口，暂不接入 Agent；
 其他 Provider 与可观测性仍为目录骨架。
 
 ## 直属子模块
@@ -12,6 +13,7 @@
 | 子模块 | 一句话概述 |
 |---|---|
 | [LanguageModels](./LanguageModels/LanguageModels.md) | 适配具体语言模型 API、SDK 和响应协议。 |
+| [Mcp](./Mcp/Mcp.md) | 配置并管理各 Server 的 stdio 连接，统一发现和调用工具。 |
 | [Persistence](./Persistence/Persistence.md) | 实现状态、记忆和 Checkpoint 所需的具体存储。 |
 | [Observability](./Observability/Observability.md) | 实现日志、指标、追踪和事件传输。 |
 
