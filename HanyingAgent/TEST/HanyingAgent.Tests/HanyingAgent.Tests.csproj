@@ -20,6 +20,13 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\HanyingAgent.csproj" />
+    <ProjectReference Include="..\HanyingAgent.McpTestServer\HanyingAgent.McpTestServer.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
+  <Target Name="CopyMcpTestServer" AfterTargets="Build">
+    <ItemGroup>
+      <McpTestServerFiles Include="$(MSBuildThisFileDirectory)..\HanyingAgent.McpTestServer\bin\$(Configuration)\net10.0\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(McpTestServerFiles)" DestinationFiles="@(McpTestServerFiles->'$(OutDir)McpTestServer\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
 </Project>

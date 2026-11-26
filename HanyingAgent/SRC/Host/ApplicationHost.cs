@@ -1,6 +1,7 @@
 using HanyingAgent.Runtime.Agent.Capabilities.Memory;
 using HanyingAgent.Runtime.Agent.Capabilities.Tools;
 using HanyingAgent.Runtime.Agent.Capabilities.Tools.Implementations;
+using HanyingAgent.Infrastructure.Mcp;
 using HanyingAgent.Contracts.Agent.Capabilities.Tools.Operations;
 using HanyingAgent.Contracts.Agent.Context.Operations;
 using HanyingAgent.Contracts.Agent.LanguageModels.Operations;
@@ -84,6 +85,11 @@ public static class ApplicationHost
             .ValidateOnStart();
 
         builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
+        builder.Services.AddOptions<McpSettings>()
+            .Bind(builder.Configuration.GetSection(McpSettings.SectionName));
+        builder.Services.AddSingleton<McpConnectionManager>();
+        builder.Services.AddSingleton<McpToolClient>();
+        builder.Services.AddHostedService(services => services.GetRequiredService<McpConnectionManager>());
         builder.Services.AddSingleton<ILocalTool, GetCurrentTimeTool>();
         builder.Services.AddSingleton<IToolManager, LocalToolManager>();
         builder.Services.AddSingleton<IWorkingMemoryStore, InMemoryWorkingMemoryStore>();
